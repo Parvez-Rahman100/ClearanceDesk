@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" role="img" aria-labelledby="title">
+  <title id="title">Alif Steel Mills emblem</title>
+  <path fill="#ed1c24" d="M7 91 100 5l93 86h-17l-76-70-76 70z"/>
+  <path fill="#4c0065" d="M26 98 100 30l74 68v53h-13v-47l-61-56-61 56v47H26z"/>
+  <path fill="#11823b" d="m43 104 57-53 57 53h-20l-37-34-38 35v55h87v14H43z"/>
+  <path fill="none" stroke="#4c0065" stroke-linecap="round" stroke-linejoin="round" stroke-width="8" d="M99 145c-13-8-8-17 0-25 7-8 9-15 4-25 18 12 21 23 10 35-5 5-6 10-4 15m-15-1c-12-8-13-17-5-27 4-5 6-10 4-16m19 42c14-9 15-20 7-30-6-7-8-15-5-23"/>
+</svg>

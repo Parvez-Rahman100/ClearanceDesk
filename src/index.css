@@ -47,6 +47,11 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
 .profile-row > svg { margin-left: auto; color: #838b83; }
 .main-area { min-height: 100vh; margin-left: 246px; }
 .topbar { display: flex; height: 61px; align-items: center; justify-content: space-between; padding: 0 38px; border-bottom: 1px solid #e8ebe5; background: rgba(255,255,255,.55); }
+.company-brand { display: flex; min-width: 0; align-items: center; gap: 9px; }
+.company-logo { display: block; width: 39px; height: 39px; flex: 0 0 auto; object-fit: contain; }
+.company-copy { display: grid; gap: 3px; }
+.company-copy strong { color: #303a32; font-size: 12px; font-weight: 700; }
+.company-copy span { color: #7d877e; font-size: 9px; }
 .breadcrumb { color: #828a83; font-size: 11px; }
 .breadcrumb span { margin: 0 9px; color: #b3bab3; }
 .breadcrumb strong { color: #3b463e; font-weight: 600; }
