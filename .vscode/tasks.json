@@ -1,0 +1,61 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Validate Order Clearance Tracker",
+			"type": "shell",
+			"command": "npm.cmd install; if ($LASTEXITCODE -eq 0) { npm.cmd run build }",
+			"isBackground": false,
+			"problemMatcher": [
+				"$tsc"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Check production dependencies",
+			"type": "shell",
+			"command": "npm.cmd audit --omit=dev --audit-level=high",
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Check patched gRPC version",
+			"type": "shell",
+			"command": "npm.cmd view @grpc/grpc-js version",
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Validate dependency update",
+			"type": "shell",
+			"command": "npm.cmd install; if ($LASTEXITCODE -eq 0) { npm.cmd audit --omit=dev --audit-level=high; if ($LASTEXITCODE -eq 0) { npm.cmd run build } }",
+			"isBackground": false,
+			"problemMatcher": [
+				"$tsc"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Start Order Clearance Tracker",
+			"type": "shell",
+			"command": "npm.cmd run dev -- --host 127.0.0.1 --port 5173",
+			"isBackground": true,
+			"problemMatcher": [],
+			"group": "build"
+		},
+		{
+			"label": "Check Git installation",
+			"type": "shell",
+			"command": "Get-Command git.exe -All -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source; where.exe git; Test-Path 'C:\\Program Files\\Git\\cmd\\git.exe'; Test-Path 'C:\\Program Files (x86)\\Git\\cmd\\git.exe'",
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Initialize Order Clearance Tracker Git repository",
+			"type": "shell",
+			"command": "& 'C:\\Program Files\\Git\\cmd\\git.exe' -C 'D:\\Order Clearance Tracker' init; if ($LASTEXITCODE -eq 0) { & 'C:\\Program Files\\Git\\cmd\\git.exe' -C 'D:\\Order Clearance Tracker' status --short }",
+			"isBackground": false,
+			"problemMatcher": []
+		}
+	]
+}
