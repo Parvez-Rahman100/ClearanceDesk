@@ -3,8 +3,10 @@ import { ArrowDownToLine, ArrowUpRight, BadgeCheck, CalendarDays, Check, Chevron
 import { deliveryCsvHeaders, parseDeliveryCsv, readSavedOrders } from './data';
 import type { ClearanceOrder, ClearanceStatus } from './types';
 
-type Filter = 'All deliveries' | ClearanceStatus;
-const filters: Filter[] = ['All deliveries', 'OK FOR DELIVERY', 'BEFORE DELIVER CK BLNC'];
+type ActivityType = 'Added' | 'Updated' | 'Imported';
+type DeliveryActivity = { orderId: string; action: ActivityType; date: string; timestamp: number };
+type Filter = 'All deliveries' | "Today's Update" | ClearanceStatus;
+const filters: Filter[] = ['All deliveries', "Today's Update", 'OK FOR DELIVERY', 'BEFORE DELIVER CK BLNC'];
 const pageSizeOptions = [10, 25, 50, 100];
 const firebaseEnabled = Boolean(import.meta.env.VITE_FIREBASE_API_KEY && import.meta.env.VITE_FIREBASE_PROJECT_ID && import.meta.env.VITE_FIREBASE_APP_ID);
 const todayLabel = new Intl.DateTimeFormat('en-US', { weekday: 'long', month: 'long', day: 'numeric' }).format(new Date());
@@ -15,6 +17,16 @@ const formatDate = (date: string) => {
 const formatPcs = (value: number | null) => value === null ? '-' : value.toFixed(3);
 const formatWeight = (value: number) => new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(value);
 const statusClass = (status: ClearanceStatus) => `status status-${status.toLowerCase().replaceAll(' ', '-')}`;
+const getLocalDateKey = (date = new Date()) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+
+function readSavedActivities(): DeliveryActivity[] {
+  try {
+    const saved = window.localStorage.getItem('order-clearance-tracker.activity.v1');
+    return saved ? JSON.parse(saved) as DeliveryActivity[] : [];
+  } catch {
+    return [];
+  }
+}
 
 function createDoNumber(orders: ClearanceOrder[]) {
   const highest = orders.reduce((value, order) => Math.max(value, Number(order.doNumber.match(/\d+$/)?.[0] ?? 0)), 699);
@@ -27,6 +39,7 @@ function normalizeDoNumber(doNumber: string) {
 
 function App() {
   const [orders, setOrders] = useState<ClearanceOrder[]>(readSavedOrders);
+  const [activities, setActivities] = useState<DeliveryActivity[]>(readSavedActivities);
   const [filter, setFilter] = useState<Filter>('All deliveries');
   const [selectedDeliveryDate, setSelectedDeliveryDate] = useState('');
   const [query, setQuery] = useState('');
@@ -60,6 +73,14 @@ function App() {
   }, [orders]);
 
   useEffect(() => {
+    try {
+      window.localStorage.setItem('order-clearance-tracker.activity.v1', JSON.stringify(activities));
+    } catch {
+      setSyncLabel('Session only');
+    }
+  }, [activities]);
+
+  useEffect(() => {
     if (!notification) return;
     const timeout = window.setTimeout(() => setNotification(null), 4000);
     return () => window.clearTimeout(timeout);
@@ -69,17 +90,26 @@ function App() {
     setCurrentPage(1);
   }, [filter, pageSize, query, selectedDeliveryDate]);
 
+  const todayKey = getLocalDateKey();
+  const activityByOrder = useMemo(() => new Map(activities.map((activity) => [activity.orderId, activity])), [activities]);
+  const todayActivityByOrder = useMemo(
+    () => new Map(activities.filter((activity) => activity.date === todayKey).map((activity) => [activity.orderId, activity])),
+    [activities, todayKey],
+  );
   const selectedOrder = orders.find((order) => order.id === selectedId) ?? null;
   const visibleOrders = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
     return orders.filter((order) => {
-      const matchesFilter = filter === 'All deliveries' || order.status === filter;
+      const matchesFilter = filter === 'All deliveries'
+        || (filter === "Today's Update" ? todayActivityByOrder.has(order.id) : order.status === filter);
       const matchesDate = !selectedDeliveryDate || order.deliveryDate === selectedDeliveryDate;
       const matchesQuery = !normalizedQuery || [order.doNumber, order.accountCode, order.accountName]
         .some((value) => value.toLowerCase().includes(normalizedQuery));
       return matchesFilter && matchesDate && matchesQuery;
-    });
-  }, [filter, orders, query, selectedDeliveryDate]);
+    }).sort((left, right) => filter === "Today's Update"
+      ? (todayActivityByOrder.get(right.id)?.timestamp ?? 0) - (todayActivityByOrder.get(left.id)?.timestamp ?? 0)
+      : 0);
+  }, [filter, orders, query, selectedDeliveryDate, todayActivityByOrder]);
 
   const pageCount = Math.max(1, Math.ceil(visibleOrders.length / pageSize));
   const pageStart = visibleOrders.length === 0 ? 0 : (currentPage - 1) * pageSize + 1;
@@ -100,6 +130,7 @@ function App() {
   const pcsTotal = orders.reduce((sum, order) => sum + (order.pcsTn ?? 0), 0);
   const weightTotal = orders.reduce((sum, order) => sum + order.weight, 0);
   const balanceCheckCount = orders.filter((order) => order.status === 'BEFORE DELIVER CK BLNC').length;
+  const todayActivityCount = orders.filter((order) => todayActivityByOrder.has(order.id)).length;
 
   function saveOrder(order: ClearanceOrder): string | null {
     const originalOrder = orders.find((item) => item.id === order.id);
@@ -109,9 +140,15 @@ function App() {
       : undefined;
     if (duplicate) return `${order.doNumber} already exists. Each DO number must be unique.`;
 
+    const timestamp = Date.now();
+    const action: ActivityType = originalOrder ? 'Updated' : 'Added';
     setOrders((current) => current.some((item) => item.id === order.id)
       ? current.map((item) => item.id === order.id ? order : item)
       : [...current, order]);
+    setActivities((current) => [
+      ...current.filter((activity) => activity.orderId !== order.id),
+      { orderId: order.id, action, date: getLocalDateKey(new Date(timestamp)), timestamp },
+    ]);
     if (firebaseEnabled) import('./firebase').then(({ saveRemoteOrder }) => saveRemoteOrder(order)).then(() => setSyncLabel('Cloud connected')).catch(() => setSyncLabel('Saved on this device'));
     setShowDialog(false);
     setEditingOrder(null);
@@ -128,6 +165,7 @@ function App() {
         setSyncLabel('Cloud connected');
       }
       setOrders((current) => current.filter((item) => item.id !== order.id));
+      setActivities((current) => current.filter((activity) => activity.orderId !== order.id));
       setSelectedId(null);
       setConfirmDelete(false);
       setNotification({ message: `${order.doNumber} deleted`, type: 'success' });
@@ -173,7 +211,12 @@ function App() {
         if (seenDoNumbers.has(normalizedDoNumber)) throw new Error(`${order.doNumber} appears more than once in the CSV. No rows were imported.`);
         seenDoNumbers.add(normalizedDoNumber);
       }
+      const timestamp = Date.now();
       setOrders((current) => [...current, ...importedOrders]);
+      setActivities((current) => [
+        ...current.filter((activity) => !importedOrders.some((order) => order.id === activity.orderId)),
+        ...importedOrders.map((order) => ({ orderId: order.id, action: 'Imported' as const, date: getLocalDateKey(new Date(timestamp)), timestamp })),
+      ]);
       setFilter('All deliveries');
       setSelectedDeliveryDate('');
       setQuery('');
@@ -227,19 +270,19 @@ function App() {
 
           <section className="orders-panel">
             <div className="panel-heading"><div><div className="panel-title-row"><h2>Delivery register</h2><span className="result-count">{visibleOrders.length}</span></div><p>{selectedDeliveryDate ? `Deliveries for ${formatDate(selectedDeliveryDate)}.` : 'Photo records transcribed for October 2026.'}</p></div><div className="panel-actions"><input ref={importInput} className="sr-only" type="file" accept=".csv,text/csv" aria-label="Choose CSV file to import" onChange={importCsv} /><button className="button button-quiet" disabled={isImporting} onClick={() => importInput.current?.click()}><FileUp size={16} />{isImporting ? 'Importing…' : 'Import CSV'}</button><button className="button button-quiet" onClick={exportOrders}><ArrowDownToLine size={16} />Export CSV</button></div></div>
-            <div className="table-toolbar"><div className="filter-tabs" role="tablist" aria-label="Filter deliveries">{filters.map((item) => <button key={item} role="tab" aria-selected={filter === item} className={`filter-tab ${filter === item ? 'selected' : ''}`} onClick={() => setFilter(item)}>{item === 'All deliveries' ? item : item === 'OK FOR DELIVERY' ? 'OK for delivery' : 'Balance check'}{item === 'BEFORE DELIVER CK BLNC' && <span className="tab-count">{balanceCheckCount}</span>}</button>)}</div><label className="search-box"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search account or DO no." aria-label="Search deliveries" />{query && <button type="button" onClick={() => setQuery('')} aria-label="Clear search"><X size={14} /></button>}</label></div>
+            <div className="table-toolbar"><div className="filter-tabs" role="tablist" aria-label="Filter deliveries">{filters.map((item) => <button key={item} role="tab" aria-selected={filter === item} className={`filter-tab ${filter === item ? 'selected' : ''}`} onClick={() => setFilter(item)}>{item === 'All deliveries' ? item : item === "Today's Update" ? item : item === 'OK FOR DELIVERY' ? 'OK for delivery' : 'Balance check'}{item === "Today's Update" && <span className="tab-count">{todayActivityCount}</span>}{item === 'BEFORE DELIVER CK BLNC' && <span className="tab-count">{balanceCheckCount}</span>}</button>)}</div><label className="search-box"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search account or DO no." aria-label="Search deliveries" />{query && <button type="button" onClick={() => setQuery('')} aria-label="Clear search"><X size={14} /></button>}</label></div>
             <div className="entries-toolbar"><label htmlFor="page-size">Show <select id="page-size" value={pageSize} onChange={(event) => setPageSize(Number(event.target.value))}>{pageSizeOptions.map((size) => <option key={size} value={size}>{size}</option>)}</select> entries</label></div>
             <div className="table-scroll"><table><thead><tr><th>DATE</th><th>ACCOUNT NAME</th><th>INV / DO NO</th><th>PCS TN</th><th>WEIGHT</th><th>STATUS</th><th><span className="sr-only">Open delivery details</span></th></tr></thead><tbody>
               {paginatedOrders.map((order) => <tr key={order.id}>
                 <td><span className="delivery-date">{formatDate(order.deliveryDate)}</span></td>
                 <td><div className="customer-cell"><strong>{order.accountCode}. {order.accountName}</strong></div></td>
-                <td><button className="order-reference" onClick={() => setSelectedId(order.id)}><strong>{order.doNumber}</strong></button></td>
+                <td><button className="order-reference" onClick={() => setSelectedId(order.id)}><strong>{order.doNumber}</strong>{activityByOrder.get(order.id)?.date === todayKey && <span className="activity-label">{activityByOrder.get(order.id)?.action} today</span>}</button></td>
                 <td className="numeric-cell">{formatPcs(order.pcsTn)}</td>
                 <td className="numeric-cell weight-cell">{formatWeight(order.weight)}</td>
                 <td><span className={statusClass(order.status)}><span />{order.status}</span></td>
                 <td><button className="row-open" onClick={() => setSelectedId(order.id)} aria-label={`Open ${order.doNumber}`}><ArrowUpRight size={16} /></button></td>
               </tr>)}
-            </tbody></table>{visibleOrders.length === 0 && <div className="empty-state"><Search size={22} /><strong>No matching deliveries</strong><span>Try another account, DO number, or status.</span></div>}</div>
+            </tbody></table>{visibleOrders.length === 0 && <div className="empty-state"><Search size={22} /><strong>{filter === "Today's Update" ? 'No delivery updates today' : 'No matching deliveries'}</strong><span>{filter === "Today's Update" ? 'Added, edited, or imported deliveries will appear here.' : 'Try another account, DO number, or status.'}</span></div>}</div>
             <div className="table-footer"><span>Showing <strong>{pageStart} to {pageEnd}</strong> of <strong>{visibleOrders.length}</strong> deliveries</span><nav className="pagination" aria-label="Delivery register pages">
               <button onClick={() => setCurrentPage(1)} disabled={currentPage === 1} aria-label="First page">First</button>
               <button onClick={() => setCurrentPage((page) => Math.max(1, page - 1))} disabled={currentPage === 1} aria-label="Previous page">Previous</button>

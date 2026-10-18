@@ -123,6 +123,7 @@ tbody tr:hover { background: #fcfdfb; }
 .order-reference { display: grid; gap: 4px; padding: 0; border: 0; background: none; cursor: pointer; text-align: left; }
 .order-reference strong { color: #49654e; font-size: 10px; font-weight: 700; }
 .order-reference span, .customer-cell span { color: #929a93; font-size: 9px; }
+.order-reference .activity-label { color: #648067; font-size: 8px; font-weight: 600; }
 .customer-cell { display: grid; gap: 4px; }
 .customer-cell strong { color: #374139; font-size: 10px; font-weight: 650; }
 .progress-cell { width: 104px; }
