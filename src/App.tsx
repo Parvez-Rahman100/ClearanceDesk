@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
-import { ArrowDownToLine, ArrowUpRight, BadgeCheck, CalendarDays, Check, ChevronDown, CircleAlert, LayoutDashboard, Plus, Search, Trash2, X } from 'lucide-react';
-import { readSavedOrders } from './data';
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
+import { ArrowDownToLine, ArrowUpRight, BadgeCheck, CalendarDays, Check, ChevronDown, CircleAlert, FileUp, LayoutDashboard, Plus, Search, Trash2, X } from 'lucide-react';
+import { deliveryCsvHeaders, parseDeliveryCsv, readSavedOrders } from './data';
 import type { ClearanceOrder, ClearanceStatus } from './types';
 
 type Filter = 'All deliveries' | ClearanceStatus;
@@ -20,6 +20,10 @@ function createDoNumber(orders: ClearanceOrder[]) {
   return `DO ${String(highest + 1).padStart(4, '0')}`;
 }
 
+function normalizeDoNumber(doNumber: string) {
+  return doNumber.replace(/\s+/g, '').toUpperCase();
+}
+
 function App() {
   const [orders, setOrders] = useState<ClearanceOrder[]>(readSavedOrders);
   const [filter, setFilter] = useState<Filter>('All deliveries');
@@ -30,7 +34,9 @@ function App() {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
-  const [notification, setNotification] = useState<string | null>(null);
+  const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  const [isImporting, setIsImporting] = useState(false);
+  const importInput = useRef<HTMLInputElement>(null);
   const [syncLabel, setSyncLabel] = useState(firebaseEnabled ? 'Connecting' : 'Saved on this device');
 
   useEffect(() => {
@@ -70,13 +76,21 @@ function App() {
   const weightTotal = orders.reduce((sum, order) => sum + order.weight, 0);
   const balanceCheckCount = orders.filter((order) => order.status === 'BEFORE DELIVER CK BLNC').length;
 
-  function saveOrder(order: ClearanceOrder) {
+  function saveOrder(order: ClearanceOrder): string | null {
+    const originalOrder = orders.find((item) => item.id === order.id);
+    const doNumberChanged = !originalOrder || normalizeDoNumber(originalOrder.doNumber) !== normalizeDoNumber(order.doNumber);
+    const duplicate = doNumberChanged
+      ? orders.find((item) => item.id !== order.id && normalizeDoNumber(item.doNumber) === normalizeDoNumber(order.doNumber))
+      : undefined;
+    if (duplicate) return `${order.doNumber} already exists. Each DO number must be unique.`;
+
     setOrders((current) => current.some((item) => item.id === order.id)
       ? current.map((item) => item.id === order.id ? order : item)
       : [...current, order]);
     if (firebaseEnabled) import('./firebase').then(({ saveRemoteOrder }) => saveRemoteOrder(order)).then(() => setSyncLabel('Cloud connected')).catch(() => setSyncLabel('Saved on this device'));
     setShowDialog(false);
     setEditingOrder(null);
+    return null;
   }
 
   async function deleteOrder(order: ClearanceOrder) {
@@ -91,7 +105,7 @@ function App() {
       setOrders((current) => current.filter((item) => item.id !== order.id));
       setSelectedId(null);
       setConfirmDelete(false);
-      setNotification(`${order.doNumber} deleted`);
+      setNotification({ message: `${order.doNumber} deleted`, type: 'success' });
     } catch (error) {
       console.error('Failed to delete delivery record', error);
       setDeleteError(`Could not delete ${order.doNumber}. Please try again.`);
@@ -102,7 +116,7 @@ function App() {
 
   function exportOrders() {
     const rows = [
-      ['DATE', 'ACCOUNT CODE', 'ACCOUNT NAME', 'INV / DO NO', 'Sum of PCS TN', 'Sum of WEIGHT', 'STATUS'],
+      deliveryCsvHeaders,
       ...visibleOrders.map((order) => [order.deliveryDate, order.accountCode, order.accountName, order.doNumber, order.pcsTn ?? '-', order.weight, order.status]),
     ];
     const csv = rows.map((row) => row.map((value) => `"${String(value).replaceAll('"', '""')}"`).join(',')).join('\n');
@@ -111,6 +125,51 @@ function App() {
     link.download = 'delivery-clearance.csv';
     link.click();
     URL.revokeObjectURL(link.href);
+  }
+
+  async function importCsv(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+
+    if (!file.name.toLowerCase().endsWith('.csv')) {
+      setNotification({ message: 'Only .csv files can be uploaded.', type: 'error' });
+      return;
+    }
+
+    setIsImporting(true);
+    try {
+      const importedOrders = parseDeliveryCsv(await file.text());
+      const seenDoNumbers = new Set<string>();
+      for (const order of importedOrders) {
+        const normalizedDoNumber = normalizeDoNumber(order.doNumber);
+        const existingOrder = orders.find((item) => normalizeDoNumber(item.doNumber) === normalizedDoNumber);
+        if (existingOrder) throw new Error(`${order.doNumber} already exists. No rows were imported.`);
+        if (seenDoNumbers.has(normalizedDoNumber)) throw new Error(`${order.doNumber} appears more than once in the CSV. No rows were imported.`);
+        seenDoNumbers.add(normalizedDoNumber);
+      }
+      setOrders((current) => [...current, ...importedOrders]);
+      setFilter('All deliveries');
+      setQuery('');
+      setNotification({ message: `${importedOrders.length} deliveries imported`, type: 'success' });
+
+      if (firebaseEnabled) {
+        try {
+          const { saveRemoteOrder } = await import('./firebase');
+          await Promise.all(importedOrders.map((order) => saveRemoteOrder(order)));
+          setSyncLabel('Cloud connected');
+        } catch (error) {
+          console.error('Failed to sync imported delivery records', error);
+          setSyncLabel('Saved on this device');
+          setNotification({ message: 'Deliveries imported locally, but cloud sync failed.', type: 'error' });
+        }
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Could not read this CSV file.';
+      setNotification({ message, type: 'error' });
+    } finally {
+      setIsImporting(false);
+    }
   }
 
   return (
@@ -140,7 +199,7 @@ function App() {
           </section>
 
           <section className="orders-panel">
-            <div className="panel-heading"><div><div className="panel-title-row"><h2>Delivery register</h2><span className="result-count">{visibleOrders.length}</span></div><p>Photo records transcribed for October 2026.</p></div><div className="panel-actions"><button className="button button-quiet" onClick={exportOrders}><ArrowDownToLine size={16} />Export CSV</button></div></div>
+            <div className="panel-heading"><div><div className="panel-title-row"><h2>Delivery register</h2><span className="result-count">{visibleOrders.length}</span></div><p>Photo records transcribed for October 2026.</p></div><div className="panel-actions"><input ref={importInput} className="sr-only" type="file" accept=".csv,text/csv" aria-label="Choose CSV file to import" onChange={importCsv} /><button className="button button-quiet" disabled={isImporting} onClick={() => importInput.current?.click()}><FileUp size={16} />{isImporting ? 'Importing…' : 'Import CSV'}</button><button className="button button-quiet" onClick={exportOrders}><ArrowDownToLine size={16} />Export CSV</button></div></div>
             <div className="table-toolbar"><div className="filter-tabs" role="tablist" aria-label="Filter deliveries">{filters.map((item) => <button key={item} role="tab" aria-selected={filter === item} className={`filter-tab ${filter === item ? 'selected' : ''}`} onClick={() => setFilter(item)}>{item === 'All deliveries' ? item : item === 'OK FOR DELIVERY' ? 'OK for delivery' : 'Balance check'}{item === 'BEFORE DELIVER CK BLNC' && <span className="tab-count">{balanceCheckCount}</span>}</button>)}</div><label className="search-box"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search account or DO no." aria-label="Search deliveries" />{query && <button type="button" onClick={() => setQuery('')} aria-label="Clear search"><X size={14} /></button>}</label></div>
             <div className="table-scroll"><table><thead><tr><th>DATE</th><th>ACCOUNT NAME</th><th>INV / DO NO</th><th>PCS TN</th><th>WEIGHT</th><th>STATUS</th><th><span className="sr-only">Open delivery details</span></th></tr></thead><tbody>
               {visibleOrders.map((order) => <tr key={order.id}>
@@ -172,12 +231,12 @@ function App() {
         {deleteError && <p className="delete-error" role="alert">{deleteError}</p>}
         <div className="confirm-actions"><button className="button button-secondary" disabled={isDeleting} onClick={() => { setConfirmDelete(false); setDeleteError(null); }}>No, keep it</button><button className="button button-danger" disabled={isDeleting} onClick={() => void deleteOrder(selectedOrder)}>{isDeleting ? 'Deleting…' : 'Yes, delete'}</button></div>
       </section></div>}
-      {notification && <div className="toast" role="status"><span>{notification}</span><button className="toast-close" onClick={() => setNotification(null)} aria-label="Dismiss notification"><X size={15} /></button></div>}
+      {notification && <div className={`toast ${notification.type === 'error' ? 'toast-error' : ''}`} role={notification.type === 'error' ? 'alert' : 'status'}><span>{notification.message}</span><button className="toast-close" onClick={() => setNotification(null)} aria-label="Dismiss notification"><X size={15} /></button></div>}
     </div>
   );
 }
 
-function DeliveryDialog({ orders, order, onClose, onSave }: { orders: ClearanceOrder[]; order: ClearanceOrder | null; onClose: () => void; onSave: (order: ClearanceOrder) => void }) {
+function DeliveryDialog({ orders, order, onClose, onSave }: { orders: ClearanceOrder[]; order: ClearanceOrder | null; onClose: () => void; onSave: (order: ClearanceOrder) => string | null }) {
   const [deliveryDate, setDeliveryDate] = useState(order?.deliveryDate ?? new Date().toISOString().slice(0, 10));
   const [accountCode, setAccountCode] = useState(order?.accountCode ?? '');
   const [accountName, setAccountName] = useState(order?.accountName ?? '');
@@ -185,17 +244,19 @@ function DeliveryDialog({ orders, order, onClose, onSave }: { orders: ClearanceO
   const [pcsTn, setPcsTn] = useState(order?.pcsTn?.toString() ?? '');
   const [weight, setWeight] = useState(order?.weight.toString() ?? '');
   const [status, setStatus] = useState<ClearanceStatus>(order?.status ?? 'OK FOR DELIVERY');
+  const [doNumberError, setDoNumberError] = useState<string | null>(null);
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const parsedPcs = pcsTn.trim() === '' || pcsTn.trim() === '-' ? null : Number(pcsTn);
     if (parsedPcs !== null && !Number.isFinite(parsedPcs)) return;
-    onSave({ id: order?.id ?? `delivery-${crypto.randomUUID()}`, deliveryDate, accountCode: accountCode.trim().toUpperCase(), accountName: accountName.trim(), doNumber: doNumber.trim().toUpperCase(), pcsTn: parsedPcs, weight: Number(weight), status });
+    const error = onSave({ id: order?.id ?? `delivery-${crypto.randomUUID()}`, deliveryDate, accountCode: accountCode.trim().toUpperCase(), accountName: accountName.trim(), doNumber: doNumber.trim().toUpperCase(), pcsTn: parsedPcs, weight: Number(weight), status });
+    setDoNumberError(error);
   }
 
   return <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}><form className="order-dialog" onSubmit={submit}>
     <div className="dialog-header"><div><span className="eyebrow">DELIVERY REGISTER</span><h2>{order ? 'Edit delivery' : 'Add delivery'}</h2><p>Enter the details from the delivery record.</p></div><button type="button" className="icon-button" onClick={onClose} aria-label="Close form"><X size={19} /></button></div>
-    <div className="form-grid"><label className="field">Date<input required type="date" value={deliveryDate} onChange={(event) => setDeliveryDate(event.target.value)} /></label><label className="field">Account code<input value={accountCode} onChange={(event) => setAccountCode(event.target.value)} placeholder="C271" /></label><label className="field field-wide">Account name<input required value={accountName} onChange={(event) => setAccountName(event.target.value)} placeholder="Customer / account name" /></label><label className="field">INV / DO no<input required value={doNumber} onChange={(event) => setDoNumber(event.target.value)} /></label><label className="field">PCS TN<input inputMode="decimal" value={pcsTn} onChange={(event) => setPcsTn(event.target.value)} placeholder="-" /></label><label className="field">Weight<input required min="0" step="1" type="number" value={weight} onChange={(event) => setWeight(event.target.value)} /></label><label className="field">Status<select value={status} onChange={(event) => setStatus(event.target.value as ClearanceStatus)}><option>OK FOR DELIVERY</option><option>BEFORE DELIVER CK BLNC</option></select></label></div>
+    <div className="form-grid"><label className="field">Date<input required type="date" value={deliveryDate} onChange={(event) => setDeliveryDate(event.target.value)} /></label><label className="field">Account code<input value={accountCode} onChange={(event) => setAccountCode(event.target.value)} placeholder="C271" /></label><label className="field field-wide">Account name<input required value={accountName} onChange={(event) => setAccountName(event.target.value)} placeholder="Customer / account name" /></label><label className="field">INV / DO no<input required value={doNumber} onChange={(event) => { setDoNumber(event.target.value); setDoNumberError(null); }} aria-invalid={Boolean(doNumberError)} aria-describedby={doNumberError ? 'do-number-error' : undefined} />{doNumberError && <span className="field-error" id="do-number-error" role="alert">{doNumberError}</span>}</label><label className="field">PCS TN<input inputMode="decimal" value={pcsTn} onChange={(event) => setPcsTn(event.target.value)} placeholder="-" /></label><label className="field">Weight<input required min="0" step="1" type="number" value={weight} onChange={(event) => setWeight(event.target.value)} /></label><label className="field">Status<select value={status} onChange={(event) => setStatus(event.target.value as ClearanceStatus)}><option>OK FOR DELIVERY</option><option>BEFORE DELIVER CK BLNC</option></select></label></div>
     <div className="dialog-footer"><span><span className="required-mark">*</span> Required fields</span><div><button className="button button-secondary" type="button" onClick={onClose}>Cancel</button><button className="button button-primary" type="submit"><Check size={16} />{order ? 'Save changes' : 'Add delivery'}</button></div></div>
   </form></div>;
 }

@@ -64,6 +64,122 @@ const sourceRows: Array<Omit<ClearanceOrder, 'id'>> = [
 
 export const seedOrders: ClearanceOrder[] = sourceRows.map((row, index) => ({ ...row, id: `delivery-${String(index + 1).padStart(3, '0')}` }));
 
+export const deliveryCsvHeaders = ['DATE', 'ACCOUNT CODE', 'ACCOUNT NAME', 'INV / DO NO', 'Sum of PCS TN', 'Sum of WEIGHT', 'STATUS'] as const;
+
+function parseCsvRows(contents: string): string[][] {
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let field = '';
+  let insideQuotes = false;
+  let afterQuote = false;
+
+  function finishRow() {
+    row.push(field);
+    if (row.some((value) => value.trim() !== '')) rows.push(row);
+    row = [];
+    field = '';
+    afterQuote = false;
+  }
+
+  for (let index = 0; index < contents.length; index += 1) {
+    const character = contents[index];
+    if (insideQuotes) {
+      if (character === '"' && contents[index + 1] === '"') {
+        field += '"';
+        index += 1;
+      } else if (character === '"') {
+        insideQuotes = false;
+        afterQuote = true;
+      } else {
+        field += character;
+      }
+      continue;
+    }
+
+    if (afterQuote) {
+      if (character === ',') {
+        row.push(field);
+        field = '';
+        afterQuote = false;
+      } else if (character === '\n' || character === '\r') {
+        finishRow();
+        if (character === '\r' && contents[index + 1] === '\n') index += 1;
+      } else {
+        throw new Error(`Unexpected character after a quoted value near row ${rows.length + 1}.`);
+      }
+    } else if (character === '"') {
+      if (field.length > 0) throw new Error(`Unexpected quote near row ${rows.length + 1}.`);
+      insideQuotes = true;
+    } else if (character === ',') {
+      row.push(field);
+      field = '';
+    } else if (character === '\n' || character === '\r') {
+      finishRow();
+      if (character === '\r' && contents[index + 1] === '\n') index += 1;
+    } else {
+      field += character;
+    }
+  }
+
+  if (insideQuotes) throw new Error('CSV contains an unclosed quoted value.');
+  if (field.length > 0 || row.length > 0 || afterQuote) finishRow();
+  return rows;
+}
+
+export function parseDeliveryCsv(contents: string): ClearanceOrder[] {
+  const rows = parseCsvRows(contents.replace(/^\uFEFF/, ''));
+  if (rows.length < 2) throw new Error('CSV must include the required header and at least one delivery row.');
+
+  const header = rows[0].map((value) => value.trim().toUpperCase());
+  if (header.length !== deliveryCsvHeaders.length || deliveryCsvHeaders.some((value, index) => header[index] !== value.toUpperCase())) {
+    throw new Error(`CSV headers must be: ${deliveryCsvHeaders.join(', ')}.`);
+  }
+
+  return rows.slice(1).map((values, index) => {
+    const rowNumber = index + 2;
+    if (values.length !== deliveryCsvHeaders.length) throw new Error(`Row ${rowNumber} must contain exactly ${deliveryCsvHeaders.length} columns.`);
+
+    const [dateText, accountCode, accountName, doNumber, pcsText, weightText, statusText] = values.map((value) => value.trim());
+    let deliveryDate = dateText;
+    const dayFirstDate = /^(\d{2})-(\d{2})-(\d{2}|\d{4})$/.exec(dateText);
+    if (dayFirstDate) {
+      const [, day, month, yearText] = dayFirstDate;
+      const year = yearText.length === 2 ? `20${yearText}` : yearText;
+      deliveryDate = `${year}-${month}-${day}`;
+    }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(deliveryDate)) {
+      throw new Error(`Row ${rowNumber}: DATE must use YYYY-MM-DD or DD-MM-YY format.`);
+    }
+    const parsedDate = new Date(`${deliveryDate}T00:00:00Z`);
+    if (Number.isNaN(parsedDate.getTime()) || parsedDate.toISOString().slice(0, 10) !== deliveryDate) {
+      throw new Error(`Row ${rowNumber}: DATE is not a valid calendar date.`);
+    }
+    if (!accountCode || !accountName || !doNumber) throw new Error(`Row ${rowNumber}: ACCOUNT CODE, ACCOUNT NAME, and INV / DO NO are required.`);
+
+    const pcsTn = pcsText === '' || pcsText === '-' ? null : Number(pcsText);
+    if (pcsTn !== null && (!Number.isFinite(pcsTn) || pcsTn < 0)) throw new Error(`Row ${rowNumber}: Sum of PCS TN must be a non-negative number or "-".`);
+    if (!weightText || !Number.isFinite(Number(weightText)) || Number(weightText) < 0) {
+      throw new Error(`Row ${rowNumber}: Sum of WEIGHT must be a non-negative number.`);
+    }
+
+    const normalizedStatus = statusText.toUpperCase();
+    if (normalizedStatus !== 'OK FOR DELIVERY' && normalizedStatus !== 'BEFORE DELIVER CK BLNC') {
+      throw new Error(`Row ${rowNumber}: STATUS must be OK FOR DELIVERY or BEFORE DELIVER CK BLNC.`);
+    }
+
+    return {
+      id: `delivery-${crypto.randomUUID()}`,
+      deliveryDate,
+      accountCode: accountCode.toUpperCase(),
+      accountName,
+      doNumber: doNumber.toUpperCase(),
+      pcsTn,
+      weight: Number(weightText),
+      status: normalizedStatus,
+    };
+  });
+}
+
 export function readSavedOrders(): ClearanceOrder[] {
   try {
     const saved = window.localStorage.getItem('order-clearance-tracker.deliveries.v2');

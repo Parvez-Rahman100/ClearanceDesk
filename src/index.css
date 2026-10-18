@@ -150,6 +150,7 @@ tbody tr:hover { background: #fcfdfb; }
 .icon-button:hover { background: #f3f5f1; }
 .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px 13px; padding: 20px 25px 23px; }
 .field { position: relative; display: grid; gap: 6px; color: #59645b; font-size: 10px; font-weight: 650; }
+.field-error { color: #a33f38; font-size: 10px; font-weight: 500; }
 .field-wide { grid-column: 1 / -1; }
 .field input, .field select, .status-select-label select { width: 100%; height: 37px; padding: 0 10px; border: 1px solid #dfe5dc; border-radius: 4px; background: white; color: #374239; font-size: 11px; }
 .field input::placeholder { color: #a2aaa2; }
@@ -196,6 +197,7 @@ tbody tr:hover { background: #fcfdfb; }
 .confirm-dialog > .delete-error { color: #a33f38; }
 .confirm-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
 .toast { position: fixed; right: 24px; bottom: 24px; z-index: 7; display: flex; align-items: center; gap: 14px; padding: 12px 14px; border: 1px solid #d8e2d5; border-radius: 5px; background: #fbfdf9; color: #35533d; box-shadow: 0 8px 28px rgba(25,39,28,.14); font-size: 12px; font-weight: 650; }
+.toast-error { border-color: #e5c7c4; background: #fffafa; color: #963e37; }
 .toast-close { display: grid; width: 24px; height: 24px; place-items: center; border: 0; border-radius: 3px; background: transparent; color: #69756b; cursor: pointer; }
 .toast-close:hover { background: #edf2e9; }
 .sr-only { position: absolute; overflow: hidden; width: 1px; height: 1px; clip: rect(0,0,0,0); white-space: nowrap; }
