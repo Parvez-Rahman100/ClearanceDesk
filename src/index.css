@@ -81,6 +81,25 @@ h1, h2, h3, p { margin: 0; }
 .bangla-delivery-table th:first-child, .bangla-delivery-table td:first-child { padding-left: 9px; }
 .bangla-delivery-table th:last-child, .bangla-delivery-table td:last-child { padding-right: 9px; }
 .bangla-delivery-table td strong { font-weight: 700; }
+.bangla-export-sheet { position: fixed; top: 0; left: -12000px; width: 1155px; padding: 8px 58px 0; border: 18px solid #3f5ff5; background: #fff; color: #111; font-family: "Nirmala UI", "Vrinda", sans-serif; }
+.bangla-export-header { position: relative; display: flex; height: 97px; align-items: center; justify-content: center; text-align: center; }
+.bangla-export-header img { position: absolute; top: -8px; left: 4px; width: 92px; height: 88px; object-fit: contain; }
+.bangla-export-heading { transform: translateY(3px); }
+.bangla-export-header h2 { color: #5a2478; font-size: 31px; font-weight: 700; line-height: 1.2; }
+.bangla-export-header p { margin-top: 5px; color: #15264c; font-size: 19px; font-weight: 700; }
+.bangla-export-table { width: 100%; border-collapse: collapse; table-layout: fixed; color: #111; font-size: 16px; font-weight: 700; }
+.bangla-export-table col:nth-child(1) { width: 9.5%; }
+.bangla-export-table col:nth-child(2) { width: 9.5%; }
+.bangla-export-table col:nth-child(3) { width: 29%; }
+.bangla-export-table col:nth-child(4) { width: 37%; }
+.bangla-export-table col:nth-child(5) { width: 15%; }
+.bangla-export-table th, .bangla-export-table td { height: 29px; padding: 3px 8px; border: 1px solid #111; text-align: center; vertical-align: middle; }
+.bangla-export-table thead th { background: #00d9df; }
+.bangla-export-table tbody td:last-child, .bangla-export-table tfoot td:last-child { text-align: right; }
+.bangla-export-table tbody td:last-child { padding-right: 10px; }
+.bangla-export-table tfoot td, .bangla-export-table tfoot th { background: #00d9df; }
+.bangla-export-table tfoot td:first-child { background: #fff; border-left-color: transparent; border-bottom-color: transparent; }
+.bangla-export-table tfoot th { text-align: right; }
 .page-subtitle { margin-top: 6px; color: #788179; font-size: 12px; }
 .button { display: inline-flex; min-height: 35px; align-items: center; justify-content: center; gap: 8px; padding: 0 12px; border: 1px solid transparent; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: 650; transition: background .15s ease, border-color .15s ease; }
 .button-primary { border-color: #365842; background: #3c6048; color: white; }

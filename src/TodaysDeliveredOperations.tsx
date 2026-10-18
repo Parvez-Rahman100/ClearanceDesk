@@ -51,7 +51,7 @@ function TodaysDeliveredOperations({ onSectionChange }: { onSectionChange: (isBa
   const [storageError, setStorageError] = useState<string | null>(null);
   const [isExporting, setIsExporting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
-  const deliveryPanelRef = useRef<HTMLElement>(null);
+  const exportSheetRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
     try {
@@ -147,8 +147,8 @@ function TodaysDeliveredOperations({ onSectionChange }: { onSectionChange: (isBa
   }
 
   async function exportBanglaImage() {
-    const panel = deliveryPanelRef.current;
-    if (!panel) {
+    const exportSheet = exportSheetRef.current;
+    if (!exportSheet) {
       setExportError('ছবি তৈরি করা যায়নি।');
       return;
     }
@@ -158,12 +158,47 @@ function TodaysDeliveredOperations({ onSectionChange }: { onSectionChange: (isBa
     let imageUrl: string | null = null;
     try {
       await document.fonts.ready;
-      const imageBlob = await toBlob(panel, { backgroundColor: '#ffffff', cacheBust: true, pixelRatio: 2 });
+      const previousStyle = exportSheet.getAttribute('style');
+      let imageBlob: Blob | null;
+      exportSheet.style.position = 'fixed';
+      exportSheet.style.left = '0px';
+      exportSheet.style.top = '0px';
+      exportSheet.style.zIndex = '999999';
+      exportSheet.style.opacity = '0';
+      exportSheet.style.pointerEvents = 'none';
+      try {
+        imageBlob = await toBlob(exportSheet, {
+          backgroundColor: '#ffffff',
+          cacheBust: true,
+          pixelRatio: 2,
+          style: { opacity: '1' },
+        });
+      } finally {
+        if (previousStyle === null) exportSheet.removeAttribute('style');
+        else exportSheet.setAttribute('style', previousStyle);
+      }
+
       if (!imageBlob) {
         throw new Error('PNG image generation returned no data');
       }
 
       imageUrl = URL.createObjectURL(imageBlob);
+      const preview = new Image();
+      preview.src = imageUrl;
+      await preview.decode();
+      const canvas = document.createElement('canvas');
+      canvas.width = preview.naturalWidth;
+      canvas.height = preview.naturalHeight;
+      const context = canvas.getContext('2d');
+      if (!context) {
+        throw new Error('Could not validate generated PNG');
+      }
+      context.drawImage(preview, 0, 0);
+      const border = context.getImageData(4, 4, 1, 1).data;
+      if (border[2] < 200 || border[0] > 120 || border[1] > 150) {
+        throw new Error('Generated PNG is blank or missing the blue frame');
+      }
+
       const download = document.createElement('a');
       download.download = `bangla-delivery-${selectedDate}.png`;
       download.href = imageUrl;
@@ -209,7 +244,7 @@ function TodaysDeliveredOperations({ onSectionChange }: { onSectionChange: (isBa
             : <><article className="metric"><div className="metric-top"><span>মোট পরিমাণ (মেঃ টন)</span></div><div className="metric-value">{formatBanglaQuantity(banglaQuantity)}</div><div className="metric-foot">নির্বাচিত দিনের মোট ডেলিভারি</div></article><article className="metric"><div className="metric-top"><span>ডেলিভারির তারিখ</span></div><div className="metric-value metric-date-value">{sectionDate}</div><div className="metric-foot">নির্বাচিত দিনের বাংলা ডেলিভারি</div></article></>}
         </section>
 
-        <section className="orders-panel" ref={deliveryPanelRef}>
+        <section className="orders-panel">
           <div className="panel-heading">
             <div><div className="panel-title-row"><h2>{section === 'english' ? 'English delivery' : 'বাংলা ডেলিভারি'}</h2><span className="result-count">{isBangla ? activeCount.toLocaleString('bn-BD') : activeCount}</span></div><p>{section === 'english' ? 'Sales delivery records' : 'বাংলা ডেলিভারি রেকর্ড'} · {sectionDate}</p></div>
           </div>
@@ -228,6 +263,28 @@ function TodaysDeliveredOperations({ onSectionChange }: { onSectionChange: (isBa
         </section>
         <footer className="page-footer"><span>{isBangla ? 'ক্লিয়ারেন্স ডেস্ক | আজকের ডেলিভারি কার্যক্রম' : "Clearance Desk | Today's Delivered Operations"}</span><span>{isBangla ? 'বাংলা ডেলিভারি তালিকা' : 'English and Bangla registers are stored separately'}</span></footer>
       </div>
+
+      {isBangla && <section className="bangla-export-sheet" ref={exportSheetRef} lang="bn" aria-hidden="true">
+        <header className="bangla-export-header">
+          <img src="/alif-steel-logo.svg" alt="" />
+          <div className="bangla-export-heading">
+            <h2>আলিফ স্টীল মিলস লিঃ</h2>
+            <p>ডেলিভারী বা বিক্রয় : {new Intl.DateTimeFormat('bn-BD', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date(`${selectedDate}T12:00:00`))} ইং</p>
+          </div>
+        </header>
+        <table className="bangla-export-table">
+          <colgroup><col /><col /><col /><col /><col /></colgroup>
+          <thead><tr><th>ক্রমিক নং</th><th>ডি ও নং</th><th>ক্রেতার নাম</th><th>ঠিকানা</th><th>পরিমাণ মেঃ টন</th></tr></thead>
+          <tbody>{selectedBanglaRows.map((row) => <tr key={row.id}>
+            <td>{row.serialNumber.toLocaleString('bn-BD')}</td>
+            <td>{displayBanglaDoNumber(row.doNumber)}</td>
+            <td>{row.customerName}</td>
+            <td>{row.address}</td>
+            <td>{formatBanglaQuantity(row.quantityTon)}</td>
+          </tr>)}</tbody>
+          <tfoot><tr><td colSpan={3}></td><th>মোট</th><td>{formatBanglaQuantity(banglaQuantity)}</td></tr></tfoot>
+        </table>
+      </section>}
 
       {showAddForm && <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setShowAddForm(false); }}><form className="order-dialog" onSubmit={section === 'english' ? addEnglishDelivery : addBanglaDelivery}>
         <div className="dialog-header"><div><span className="eyebrow">{section === 'english' ? 'ENGLISH DELIVERY' : 'বাংলা ডেলিভারি'}</span><h2>{section === 'english' ? 'Add English delivery' : 'বাংলা ডেলিভারি যোগ করুন'}</h2><p>{section === 'english' ? 'Enter the delivery details.' : 'ডেলিভারির তথ্য লিখুন।'}</p></div><button type="button" className="icon-button" onClick={() => setShowAddForm(false)} aria-label={isBangla ? 'ফর্ম বন্ধ করুন' : 'Close form'}><X size={19} /></button></div>
