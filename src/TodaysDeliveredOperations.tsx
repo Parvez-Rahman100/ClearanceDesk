@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
-import { CalendarDays, Plus, X } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+import { toBlob } from 'html-to-image';
+import { CalendarDays, Download, Plus, X } from 'lucide-react';
 import { readBanglaDeliveries, readEnglishDeliveries, type BanglaDelivery, type EnglishDelivery } from './todays-delivered-data';
 
 type Section = 'english' | 'bangla';
@@ -48,6 +49,9 @@ function TodaysDeliveredOperations({ onSectionChange }: { onSectionChange: (isBa
   const [showAddForm, setShowAddForm] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [storageError, setStorageError] = useState<string | null>(null);
+  const [isExporting, setIsExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
+  const deliveryPanelRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
     try {
@@ -142,6 +146,45 @@ function TodaysDeliveredOperations({ onSectionChange }: { onSectionChange: (isBa
     setFormError(null);
   }
 
+  async function exportBanglaImage() {
+    const panel = deliveryPanelRef.current;
+    if (!panel) {
+      setExportError('ছবি তৈরি করা যায়নি।');
+      return;
+    }
+
+    setIsExporting(true);
+    setExportError(null);
+    let imageUrl: string | null = null;
+    try {
+      await document.fonts.ready;
+      const imageBlob = await toBlob(panel, { backgroundColor: '#ffffff', cacheBust: true, pixelRatio: 2 });
+      if (!imageBlob) {
+        throw new Error('PNG image generation returned no data');
+      }
+
+      imageUrl = URL.createObjectURL(imageBlob);
+      const download = document.createElement('a');
+      download.download = `bangla-delivery-${selectedDate}.png`;
+      download.href = imageUrl;
+      document.body.appendChild(download);
+      try {
+        download.click();
+      } finally {
+        download.remove();
+      }
+      window.setTimeout(() => {
+        if (imageUrl) URL.revokeObjectURL(imageUrl);
+      }, 1000);
+    } catch (error) {
+      if (imageUrl) URL.revokeObjectURL(imageUrl);
+      console.error('Failed to export Bangla delivery image', error);
+      setExportError('ছবি ডাউনলোড করা যায়নি। আবার চেষ্টা করুন।');
+    } finally {
+      setIsExporting(false);
+    }
+  }
+
   return (
     <>
       <div className={`page-content delivered-operations-page ${isBangla ? 'bangla-language' : ''}`} lang={isBangla ? 'bn' : 'en'}>
@@ -153,9 +196,11 @@ function TodaysDeliveredOperations({ onSectionChange }: { onSectionChange: (isBa
           </div>
           <div className="hero-actions">
             <label className="date-filter"><CalendarDays size={16} /><span className="sr-only">{isBangla ? 'ডেলিভারির তারিখ নির্বাচন করুন' : 'Select delivery date'}</span><input type="date" value={selectedDate} onChange={(event) => setSelectedDate(event.target.value)} aria-label={isBangla ? 'ডেলিভারির তারিখ নির্বাচন করুন' : 'Select delivery date'} /></label>
+            {isBangla && <button className="button button-secondary" disabled={isExporting} onClick={() => void exportBanglaImage()}><Download size={16} />{isExporting ? 'ছবি তৈরি হচ্ছে…' : 'ছবি ডাউনলোড'}</button>}
             <button className="button button-primary" onClick={() => { setFormError(null); setShowAddForm(true); }}><Plus size={17} />{isBangla ? 'ডেলিভারি যোগ করুন' : 'Add English delivery'}</button>
           </div>
         </section>
+        {isBangla && exportError && <p className="workspace-form-error" role="alert">{exportError}</p>}
 
         <section className="metrics-grid" aria-label={isBangla ? 'নির্বাচিত ডেলিভারির হিসাব' : 'Selected delivery totals'}>
           <article className="metric metric-open"><div className="metric-top"><span>{section === 'english' ? 'English deliveries' : 'বাংলা ডেলিভারি'}</span><span className="metric-icon"><CalendarDays size={17} /></span></div><div className="metric-value">{isBangla ? activeCount.toLocaleString('bn-BD') : activeCount}</div><div className="metric-foot"><span className="metric-marker marker-green" />{sectionDate}</div></article>
@@ -164,7 +209,7 @@ function TodaysDeliveredOperations({ onSectionChange }: { onSectionChange: (isBa
             : <><article className="metric"><div className="metric-top"><span>মোট পরিমাণ (মেঃ টন)</span></div><div className="metric-value">{formatBanglaQuantity(banglaQuantity)}</div><div className="metric-foot">নির্বাচিত দিনের মোট ডেলিভারি</div></article><article className="metric"><div className="metric-top"><span>ডেলিভারির তারিখ</span></div><div className="metric-value metric-date-value">{sectionDate}</div><div className="metric-foot">নির্বাচিত দিনের বাংলা ডেলিভারি</div></article></>}
         </section>
 
-        <section className="orders-panel">
+        <section className="orders-panel" ref={deliveryPanelRef}>
           <div className="panel-heading">
             <div><div className="panel-title-row"><h2>{section === 'english' ? 'English delivery' : 'বাংলা ডেলিভারি'}</h2><span className="result-count">{isBangla ? activeCount.toLocaleString('bn-BD') : activeCount}</span></div><p>{section === 'english' ? 'Sales delivery records' : 'বাংলা ডেলিভারি রেকর্ড'} · {sectionDate}</p></div>
           </div>
