@@ -26,6 +26,8 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
 .brand-name span { color: #788179; font-weight: 400; }
 .workspace-label, .nav-heading { margin: 39px 8px 11px; color: #929a92; font-size: 10px; font-weight: 700; }
 .workspace-switcher { display: flex; height: 42px; align-items: center; gap: 9px; padding: 5px 7px; border: 1px solid #e7eae4; border-radius: 5px; background: white; font-size: 12px; font-weight: 600; text-align: left; }
+.workspace-switcher select { width: 100%; min-width: 0; padding: 0; border: 0; appearance: none; background: transparent; color: inherit; cursor: pointer; font-size: 12px; font-weight: 600; }
+.workspace-switcher select:focus-visible { outline-offset: 1px; }
 .workspace-switcher > svg { margin-left: auto; color: #7b857a; }
 .workspace-avatar { display: grid; width: 27px; height: 27px; place-items: center; border-radius: 4px; background: #dfe9d8; color: #496551; font-family: var(--serif); font-size: 17px; }
 .nav-heading { margin-top: 33px; }
@@ -70,6 +72,8 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
 .eyebrow-line { width: 17px; height: 1px; background: #9dad90; }
 h1, h2, h3, p { margin: 0; }
 .page-heading h1 { margin-top: 8px; color: #29342c; font-family: var(--serif); font-size: 30px; font-weight: 400; }
+.metric-date-value { font-size: 20px; }
+.workspace-form-error { margin: 0 25px 14px; color: #a33f38; font-size: 11px; }
 .page-subtitle { margin-top: 6px; color: #788179; font-size: 12px; }
 .button { display: inline-flex; min-height: 35px; align-items: center; justify-content: center; gap: 8px; padding: 0 12px; border: 1px solid transparent; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: 650; transition: background .15s ease, border-color .15s ease; }
 .button-primary { border-color: #365842; background: #3c6048; color: white; }
@@ -229,7 +233,10 @@ tbody tr:hover { background: #fcfdfb; }
 @media (max-width: 760px) {
 	.sidebar { position: static; width: auto; height: 56px; flex-direction: row; align-items: center; padding: 0 16px; border-right: 0; border-bottom: 1px solid #e9ece7; }
 	.brand { padding: 0; }
-	.workspace-label, .workspace-switcher, .primary-nav, .sidebar-bottom { display: none; }
+	.workspace-label, .primary-nav, .sidebar-bottom { display: none; }
+	.workspace-switcher { width: 205px; max-width: 58vw; height: 36px; margin-left: auto; padding: 3px 6px; gap: 5px; }
+	.workspace-switcher select { font-size: 10px; }
+	.workspace-avatar { width: 24px; height: 24px; flex: 0 0 auto; }
 	.main-area { margin-left: 0; }
 	.topbar { height: 48px; padding: 0 16px; }
 	.today-label { display: none; }

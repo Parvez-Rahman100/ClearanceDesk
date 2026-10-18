@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
 import { ArrowDownToLine, ArrowUpRight, BadgeCheck, CalendarDays, Check, ChevronDown, CircleAlert, FileUp, LayoutDashboard, Plus, Search, Trash2, X } from 'lucide-react';
 import { deliveryCsvHeaders, parseDeliveryCsv, readSavedOrders } from './data';
+import TodaysDeliveredOperations from './TodaysDeliveredOperations';
 import type { ClearanceOrder, ClearanceStatus } from './types';
 
 type ActivityType = 'Added' | 'Updated' | 'Imported';
 type DeliveryActivity = { orderId: string; action: ActivityType; date: string; timestamp: number };
 type Filter = 'All deliveries' | "Today's Update" | ClearanceStatus;
+type Workspace = 'Delivery operations' | "Today's Delivered Operations";
 const filters: Filter[] = ['All deliveries', "Today's Update", 'OK FOR DELIVERY', 'BEFORE DELIVER CK BLNC'];
 const pageSizeOptions = [10, 25, 50, 100];
 const firebaseEnabled = Boolean(import.meta.env.VITE_FIREBASE_API_KEY && import.meta.env.VITE_FIREBASE_PROJECT_ID && import.meta.env.VITE_FIREBASE_APP_ID);
@@ -38,6 +40,7 @@ function normalizeDoNumber(doNumber: string) {
 }
 
 function App() {
+  const [workspace, setWorkspace] = useState<Workspace>('Delivery operations');
   const [orders, setOrders] = useState<ClearanceOrder[]>(readSavedOrders);
   const [activities, setActivities] = useState<DeliveryActivity[]>(readSavedActivities);
   const [filter, setFilter] = useState<Filter>('All deliveries');
@@ -247,7 +250,7 @@ function App() {
       <aside className="sidebar">
         <a className="brand" href="#dashboard" aria-label="Clearance Desk home"><span className="brand-mark"><BadgeCheck size={20} /></span><span className="brand-name">Clearance<span>Desk</span></span></a>
         <div className="workspace-label">WORKSPACE</div>
-        <button className="workspace-switcher"><span className="workspace-avatar">D</span><span>Delivery operations</span><ChevronDown size={15} /></button>
+        <div className="workspace-switcher"><span className="workspace-avatar">{workspace === 'Delivery operations' ? 'D' : 'T'}</span><select aria-label="Select workspace" value={workspace} onChange={(event) => setWorkspace(event.target.value as Workspace)}><option>Delivery operations</option><option>Today's Delivered Operations</option></select><ChevronDown size={15} /></div>
         <nav className="primary-nav" aria-label="Delivery navigation">
           <div className="nav-heading">DELIVERIES</div>
           <button className={`nav-link ${filter === 'All deliveries' ? 'active' : ''}`} onClick={() => setFilter('All deliveries')}><LayoutDashboard size={17} />All records</button>
@@ -258,7 +261,8 @@ function App() {
       </aside>
 
       <main className="main-area" id="dashboard">
-        <header className="topbar"><div className="company-brand"><img className="company-logo" src="/alif-steel-logo.svg" alt="" /><div className="company-copy"><strong>Alif Steel Mills Limited</strong><span>Delivery clearance</span></div></div><div className="topbar-right"><span className="today-label"><CalendarDays size={15} />{todayLabel}</span><span className="avatar-small">DO</span></div></header>
+        <header className="topbar"><div className="company-brand"><img className="company-logo" src="/alif-steel-logo.svg" alt="" /><div className="company-copy"><strong>Alif Steel Mills Limited</strong><span>{workspace}</span></div></div><div className="topbar-right"><span className="today-label"><CalendarDays size={15} />{todayLabel}</span><span className="avatar-small">DO</span></div></header>
+        {workspace === "Today's Delivered Operations" ? <TodaysDeliveredOperations /> : <>
         <div className="page-content">
           <section className="page-heading"><div><div className="eyebrow"><span className="eyebrow-line" />DELIVERY OPERATIONS</div><h1>Delivery clearance</h1><p className="page-subtitle">Dispatch records and balance-check status, October 2026.</p></div><div className="hero-actions"><label className="date-filter"><CalendarDays size={16} /><span className="sr-only">Show deliveries for date</span><input type="date" value={selectedDeliveryDate} onChange={(event) => setSelectedDeliveryDate(event.target.value)} aria-label="Show deliveries for date" />{selectedDeliveryDate && <button type="button" className="clear-date" onClick={() => setSelectedDeliveryDate('')} aria-label="Clear date filter"><X size={14} /></button>}</label><button className="button button-primary" onClick={() => { setEditingOrder(null); setShowDialog(true); }}><Plus size={17} />Add delivery</button></div></section>
 
@@ -295,6 +299,7 @@ function App() {
           </section>
           <footer className="page-footer"><span>Clearance Desk <span className="footer-dot">|</span> Delivery operations</span><span>Imported from 2 source photos</span></footer>
         </div>
+        </>}
       </main>
 
       {showDialog && <DeliveryDialog orders={orders} order={editingOrder} defaultDeliveryDate={selectedDeliveryDate || new Date().toISOString().slice(0, 10)} onClose={() => { setShowDialog(false); setEditingOrder(null); }} onSave={saveOrder} />}
