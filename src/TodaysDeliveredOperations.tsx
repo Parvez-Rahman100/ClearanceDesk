@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type FocusEvent, type FormEvent } from 'react';
 import { toBlob } from 'html-to-image';
 import { CalendarDays, Download, Plus, X } from 'lucide-react';
+import { convertBijoyToUnicode } from 'bijoy2unicode';
 import { readBanglaDeliveries, readEnglishDeliveries, type BanglaDelivery, type EnglishDelivery } from './todays-delivered-data';
 
 type Section = 'english' | 'bangla';
@@ -47,6 +48,7 @@ function TodaysDeliveredOperations({ onSectionChange }: { onSectionChange: (isBa
   const [englishRows, setEnglishRows] = useState(readEnglishDeliveries);
   const [banglaRows, setBanglaRows] = useState(readBanglaDeliveries);
   const [showAddForm, setShowAddForm] = useState(false);
+  const [bijoyAnsiMode, setBijoyAnsiMode] = useState(true);
   const [formError, setFormError] = useState<string | null>(null);
   const [storageError, setStorageError] = useState<string | null>(null);
   const [isExporting, setIsExporting] = useState(false);
@@ -135,8 +137,8 @@ function TodaysDeliveredOperations({ onSectionChange }: { onSectionChange: (isBa
       id: `bangla-${crypto.randomUUID()}`,
       serialNumber: banglaRows.reduce((maximum, item) => Math.max(maximum, item.serialNumber), 0) + 1,
       doNumber,
-      customerName: String(form.get('customerName')).trim(),
-      address: String(form.get('address')).trim(),
+      customerName: normalizeBanglaText(String(form.get('customerName'))),
+      address: normalizeBanglaText(String(form.get('address'))),
       quantityTon,
       deliveryDate: String(form.get('deliveryDate')),
     };
@@ -144,6 +146,17 @@ function TodaysDeliveredOperations({ onSectionChange }: { onSectionChange: (isBa
     setSelectedDate(row.deliveryDate);
     setShowAddForm(false);
     setFormError(null);
+  }
+
+  function normalizeBanglaText(value: string) {
+    const trimmedValue = value.trim();
+    return bijoyAnsiMode && trimmedValue && !/[\u0980-\u09FF]/u.test(trimmedValue)
+      ? convertBijoyToUnicode(trimmedValue)
+      : trimmedValue;
+  }
+
+  function handleBanglaTextBlur(event: FocusEvent<HTMLInputElement>) {
+    event.currentTarget.value = normalizeBanglaText(event.currentTarget.value);
   }
 
   async function exportBanglaImage() {
@@ -290,7 +303,7 @@ function TodaysDeliveredOperations({ onSectionChange }: { onSectionChange: (isBa
         <div className="dialog-header"><div><span className="eyebrow">{section === 'english' ? 'ENGLISH DELIVERY' : 'বাংলা ডেলিভারি'}</span><h2>{section === 'english' ? 'Add English delivery' : 'বাংলা ডেলিভারি যোগ করুন'}</h2><p>{section === 'english' ? 'Enter the delivery details.' : 'ডেলিভারির তথ্য লিখুন।'}</p></div><button type="button" className="icon-button" onClick={() => setShowAddForm(false)} aria-label={isBangla ? 'ফর্ম বন্ধ করুন' : 'Close form'}><X size={19} /></button></div>
         {section === 'english'
           ? <div className="form-grid"><label className="field">Umbrella<input name="umbrella" required min="0" step="1" type="number" defaultValue="0" /></label><label className="field">DO date<input name="doDate" required type="date" defaultValue={selectedDate} /></label><label className="field">Delivery date<input name="deliveryDate" required type="date" defaultValue={selectedDate || dateToday()} /></label><label className="field">DO no<input name="doNumber" required placeholder="DO 0811" /></label><label className="field">Delivery challan<input name="deliveryChallan" required /></label><label className="field field-wide">Name of proprietor<input name="proprietor" required /></label><label className="field field-wide">Address<input name="address" required /></label><label className="field">PCS ton<input name="pcsTon" min="0" step="0.001" type="number" /></label><label className="field">Weight ton<input name="weightTon" required min="0" step="0.001" type="number" /></label></div>
-          : <div className="form-grid" lang="bn"><label className="field">ডেলিভারির তারিখ<input name="deliveryDate" required type="date" defaultValue={selectedDate || dateToday()} lang="bn" /></label><label className="field">ডি ও নং<input name="doNumber" required placeholder="ডি ও ০৮১১" /></label><label className="field field-wide">ক্রেতার নাম<input name="customerName" required /></label><label className="field field-wide">ঠিকানা<input name="address" required /></label><label className="field">পরিমাণ মেঃ টন<input name="quantityTon" required inputMode="decimal" /></label></div>}
+          : <div className="form-grid" lang="bn"><div className="bangla-input-mode"><span className="bangla-input-mode-title">টাইপিং পদ্ধতি</span><label><input type="radio" name="bangla-input-mode" checked={bijoyAnsiMode} onChange={() => setBijoyAnsiMode(true)} />বিজয় ANSI</label><label><input type="radio" name="bangla-input-mode" checked={!bijoyAnsiMode} onChange={() => setBijoyAnsiMode(false)} />Unicode</label><p>বিজয় ANSI-তে লিখে অন্য ঘরে গেলে বাংলা Unicode-এ রূপান্তর হবে।</p></div><label className="field">ডেলিভারির তারিখ<input name="deliveryDate" required type="date" defaultValue={selectedDate || dateToday()} lang="bn" /></label><label className="field">ডি ও নং<input name="doNumber" required placeholder="ডি ও ০৮১১" /></label><label className="field field-wide">ক্রেতার নাম<input name="customerName" required onBlur={handleBanglaTextBlur} /></label><label className="field field-wide">ঠিকানা<input name="address" required onBlur={handleBanglaTextBlur} /></label><label className="field">পরিমাণ মেঃ টন<input name="quantityTon" required inputMode="decimal" /></label></div>}
         {formError && <p className="workspace-form-error" role="alert">{formError}</p>}
         <div className="dialog-footer"><span>{section === 'english' ? <><span className="required-mark">*</span> Required fields</> : <><span className="required-mark">*</span> আবশ্যক তথ্য</>}</span><div><button className="button button-secondary" type="button" onClick={() => setShowAddForm(false)}>{isBangla ? 'বাতিল' : 'Cancel'}</button><button className="button button-primary" type="submit"><Plus size={16} />{section === 'english' ? 'Add delivery' : 'ডেলিভারি যোগ করুন'}</button></div></div>
       </form></div>}

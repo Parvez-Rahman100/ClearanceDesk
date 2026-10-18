@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.1.11",
+    "bijoy2unicode": "^1.0.2",
     "firebase": "^12.0.0",
     "html-to-image": "^1.11.13",
     "lucide-react": "^0.468.0",

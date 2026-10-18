@@ -196,6 +196,11 @@ tbody tr:hover { background: #fcfdfb; }
 .icon-button { display: grid; width: 30px; height: 30px; place-items: center; border: 1px solid #e5e9e2; border-radius: 4px; background: white; color: #69756b; cursor: pointer; }
 .icon-button:hover { background: #f3f5f1; }
 .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px 13px; padding: 20px 25px 23px; }
+.bangla-input-mode { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; color: #59645b; font-size: 10px; }
+.bangla-input-mode-title { font-weight: 650; }
+.bangla-input-mode label { display: inline-flex; align-items: center; gap: 5px; cursor: pointer; }
+.bangla-input-mode input { margin: 0; accent-color: #456a4f; }
+.bangla-input-mode p { flex-basis: 100%; margin: 0; color: #879087; font-size: 9px; }
 .field { position: relative; display: grid; gap: 6px; color: #59645b; font-size: 10px; font-weight: 650; }
 .field-error { color: #a33f38; font-size: 10px; font-weight: 500; }
 .field-wide { grid-column: 1 / -1; }
