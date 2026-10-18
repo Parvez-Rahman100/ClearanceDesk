@@ -27,6 +27,7 @@ function normalizeDoNumber(doNumber: string) {
 function App() {
   const [orders, setOrders] = useState<ClearanceOrder[]>(readSavedOrders);
   const [filter, setFilter] = useState<Filter>('All deliveries');
+  const [selectedDeliveryDate, setSelectedDeliveryDate] = useState('');
   const [query, setQuery] = useState('');
   const [showDialog, setShowDialog] = useState(false);
   const [editingOrder, setEditingOrder] = useState<ClearanceOrder | null>(null);
@@ -66,11 +67,12 @@ function App() {
     const normalizedQuery = query.trim().toLowerCase();
     return orders.filter((order) => {
       const matchesFilter = filter === 'All deliveries' || order.status === filter;
+      const matchesDate = !selectedDeliveryDate || order.deliveryDate === selectedDeliveryDate;
       const matchesQuery = !normalizedQuery || [order.doNumber, order.accountCode, order.accountName]
         .some((value) => value.toLowerCase().includes(normalizedQuery));
-      return matchesFilter && matchesQuery;
+      return matchesFilter && matchesDate && matchesQuery;
     });
-  }, [filter, orders, query]);
+  }, [filter, orders, query, selectedDeliveryDate]);
 
   const pcsTotal = orders.reduce((sum, order) => sum + (order.pcsTn ?? 0), 0);
   const weightTotal = orders.reduce((sum, order) => sum + order.weight, 0);
@@ -150,6 +152,7 @@ function App() {
       }
       setOrders((current) => [...current, ...importedOrders]);
       setFilter('All deliveries');
+      setSelectedDeliveryDate('');
       setQuery('');
       setNotification({ message: `${importedOrders.length} deliveries imported`, type: 'success' });
 
@@ -190,7 +193,7 @@ function App() {
       <main className="main-area" id="dashboard">
         <header className="topbar"><div className="company-brand"><img className="company-logo" src="/alif-steel-logo.svg" alt="" /><div className="company-copy"><strong>Alif Steel Mills Limited</strong><span>Delivery clearance</span></div></div><div className="topbar-right"><span className="today-label"><CalendarDays size={15} />{todayLabel}</span><span className="avatar-small">DO</span></div></header>
         <div className="page-content">
-          <section className="page-heading"><div><div className="eyebrow"><span className="eyebrow-line" />DELIVERY OPERATIONS</div><h1>Delivery clearance</h1><p className="page-subtitle">Dispatch records and balance-check status, October 2026.</p></div><button className="button button-primary" onClick={() => { setEditingOrder(null); setShowDialog(true); }}><Plus size={17} />Add delivery</button></section>
+          <section className="page-heading"><div><div className="eyebrow"><span className="eyebrow-line" />DELIVERY OPERATIONS</div><h1>Delivery clearance</h1><p className="page-subtitle">Dispatch records and balance-check status, October 2026.</p></div><div className="hero-actions"><label className="date-filter"><CalendarDays size={16} /><span className="sr-only">Show deliveries for date</span><input type="date" value={selectedDeliveryDate} onChange={(event) => setSelectedDeliveryDate(event.target.value)} aria-label="Show deliveries for date" />{selectedDeliveryDate && <button type="button" className="clear-date" onClick={() => setSelectedDeliveryDate('')} aria-label="Clear date filter"><X size={14} /></button>}</label><button className="button button-primary" onClick={() => { setEditingOrder(null); setShowDialog(true); }}><Plus size={17} />Add delivery</button></div></section>
 
           <section className="metrics-grid" aria-label="Delivery totals">
             <article className="metric metric-open"><div className="metric-top"><span>Delivery records</span><span className="metric-icon"><LayoutDashboard size={17} /></span></div><div className="metric-value">{orders.length}</div><div className="metric-foot"><span className="metric-marker marker-orange" />{balanceCheckCount} before balance check</div></article>
@@ -199,7 +202,7 @@ function App() {
           </section>
 
           <section className="orders-panel">
-            <div className="panel-heading"><div><div className="panel-title-row"><h2>Delivery register</h2><span className="result-count">{visibleOrders.length}</span></div><p>Photo records transcribed for October 2026.</p></div><div className="panel-actions"><input ref={importInput} className="sr-only" type="file" accept=".csv,text/csv" aria-label="Choose CSV file to import" onChange={importCsv} /><button className="button button-quiet" disabled={isImporting} onClick={() => importInput.current?.click()}><FileUp size={16} />{isImporting ? 'Importing…' : 'Import CSV'}</button><button className="button button-quiet" onClick={exportOrders}><ArrowDownToLine size={16} />Export CSV</button></div></div>
+            <div className="panel-heading"><div><div className="panel-title-row"><h2>Delivery register</h2><span className="result-count">{visibleOrders.length}</span></div><p>{selectedDeliveryDate ? `Deliveries for ${formatDate(selectedDeliveryDate)}.` : 'Photo records transcribed for October 2026.'}</p></div><div className="panel-actions"><input ref={importInput} className="sr-only" type="file" accept=".csv,text/csv" aria-label="Choose CSV file to import" onChange={importCsv} /><button className="button button-quiet" disabled={isImporting} onClick={() => importInput.current?.click()}><FileUp size={16} />{isImporting ? 'Importing…' : 'Import CSV'}</button><button className="button button-quiet" onClick={exportOrders}><ArrowDownToLine size={16} />Export CSV</button></div></div>
             <div className="table-toolbar"><div className="filter-tabs" role="tablist" aria-label="Filter deliveries">{filters.map((item) => <button key={item} role="tab" aria-selected={filter === item} className={`filter-tab ${filter === item ? 'selected' : ''}`} onClick={() => setFilter(item)}>{item === 'All deliveries' ? item : item === 'OK FOR DELIVERY' ? 'OK for delivery' : 'Balance check'}{item === 'BEFORE DELIVER CK BLNC' && <span className="tab-count">{balanceCheckCount}</span>}</button>)}</div><label className="search-box"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search account or DO no." aria-label="Search deliveries" />{query && <button type="button" onClick={() => setQuery('')} aria-label="Clear search"><X size={14} /></button>}</label></div>
             <div className="table-scroll"><table><thead><tr><th>DATE</th><th>ACCOUNT NAME</th><th>INV / DO NO</th><th>PCS TN</th><th>WEIGHT</th><th>STATUS</th><th><span className="sr-only">Open delivery details</span></th></tr></thead><tbody>
               {visibleOrders.map((order) => <tr key={order.id}>
@@ -218,7 +221,7 @@ function App() {
         </div>
       </main>
 
-      {showDialog && <DeliveryDialog orders={orders} order={editingOrder} onClose={() => { setShowDialog(false); setEditingOrder(null); }} onSave={saveOrder} />}
+      {showDialog && <DeliveryDialog orders={orders} order={editingOrder} defaultDeliveryDate={selectedDeliveryDate || new Date().toISOString().slice(0, 10)} onClose={() => { setShowDialog(false); setEditingOrder(null); }} onSave={saveOrder} />}
       {selectedOrder && <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setSelectedId(null); }}><section className="detail-panel" role="dialog" aria-modal="true" aria-labelledby="detail-title">
         <div className="detail-header"><div><span className="eyebrow">DELIVERY RECORD</span><h2 id="detail-title">{selectedOrder.doNumber}</h2></div><button className="icon-button" onClick={() => setSelectedId(null)} aria-label="Close details"><X size={19} /></button></div>
         <div className="detail-customer"><span className="customer-mark">{selectedOrder.accountCode.slice(0, 1)}</span><div><strong>{selectedOrder.accountCode}. {selectedOrder.accountName}</strong><span>{formatDate(selectedOrder.deliveryDate)}</span></div></div>
@@ -236,8 +239,8 @@ function App() {
   );
 }
 
-function DeliveryDialog({ orders, order, onClose, onSave }: { orders: ClearanceOrder[]; order: ClearanceOrder | null; onClose: () => void; onSave: (order: ClearanceOrder) => string | null }) {
-  const [deliveryDate, setDeliveryDate] = useState(order?.deliveryDate ?? new Date().toISOString().slice(0, 10));
+function DeliveryDialog({ orders, order, defaultDeliveryDate, onClose, onSave }: { orders: ClearanceOrder[]; order: ClearanceOrder | null; defaultDeliveryDate: string; onClose: () => void; onSave: (order: ClearanceOrder) => string | null }) {
+  const [deliveryDate, setDeliveryDate] = useState(order?.deliveryDate ?? defaultDeliveryDate);
   const [accountCode, setAccountCode] = useState(order?.accountCode ?? '');
   const [accountName, setAccountName] = useState(order?.accountName ?? '');
   const [doNumber, setDoNumber] = useState(order?.doNumber ?? createDoNumber(orders));

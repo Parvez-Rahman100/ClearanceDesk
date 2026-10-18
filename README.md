@@ -20,5 +20,6 @@ Copy `.env.example` to `.env.local` and enter a Firebase Web App's API key, auth
 ## Included workflows
 
 - Search by account name, account code, or DO number; filter by delivery status.
+- Select a date in the delivery header to show that day's deliveries; clear the date to see all dates again.
 - Add and edit delivery records with the same columns as the source sheets; new records cannot reuse an existing DO number.
 - Export the current delivery view as CSV, or import CSV files using the exported column order: DATE, ACCOUNT CODE, ACCOUNT NAME, INV / DO NO, Sum of PCS TN, Sum of WEIGHT, STATUS. Dates may use YYYY-MM-DD or DD-MM-YY; imports are validated for duplicate DO numbers before they are added.
