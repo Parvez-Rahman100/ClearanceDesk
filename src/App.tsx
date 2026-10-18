@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
-import { ArrowDownToLine, ArrowUpRight, BadgeCheck, CalendarDays, Check, ChevronDown, CircleAlert, LayoutDashboard, Plus, Search, X } from 'lucide-react';
+import { ArrowDownToLine, ArrowUpRight, BadgeCheck, CalendarDays, Check, ChevronDown, CircleAlert, LayoutDashboard, Plus, Search, Trash2, X } from 'lucide-react';
 import { readSavedOrders } from './data';
 import type { ClearanceOrder, ClearanceStatus } from './types';
 
@@ -27,6 +27,10 @@ function App() {
   const [showDialog, setShowDialog] = useState(false);
   const [editingOrder, setEditingOrder] = useState<ClearanceOrder | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [notification, setNotification] = useState<string | null>(null);
   const [syncLabel, setSyncLabel] = useState(firebaseEnabled ? 'Connecting' : 'Saved on this device');
 
   useEffect(() => {
@@ -39,11 +43,17 @@ function App() {
 
   useEffect(() => {
     try {
-      window.localStorage.setItem('order-clearance-tracker.deliveries.v1', JSON.stringify(orders));
+      window.localStorage.setItem('order-clearance-tracker.deliveries.v2', JSON.stringify(orders));
     } catch {
       setSyncLabel('Session only');
     }
   }, [orders]);
+
+  useEffect(() => {
+    if (!notification) return;
+    const timeout = window.setTimeout(() => setNotification(null), 4000);
+    return () => window.clearTimeout(timeout);
+  }, [notification]);
 
   const selectedOrder = orders.find((order) => order.id === selectedId) ?? null;
   const visibleOrders = useMemo(() => {
@@ -67,6 +77,27 @@ function App() {
     if (firebaseEnabled) import('./firebase').then(({ saveRemoteOrder }) => saveRemoteOrder(order)).then(() => setSyncLabel('Cloud connected')).catch(() => setSyncLabel('Saved on this device'));
     setShowDialog(false);
     setEditingOrder(null);
+  }
+
+  async function deleteOrder(order: ClearanceOrder) {
+    setIsDeleting(true);
+    setDeleteError(null);
+    try {
+      if (firebaseEnabled) {
+        const { deleteRemoteOrder } = await import('./firebase');
+        await deleteRemoteOrder(order.id);
+        setSyncLabel('Cloud connected');
+      }
+      setOrders((current) => current.filter((item) => item.id !== order.id));
+      setSelectedId(null);
+      setConfirmDelete(false);
+      setNotification(`${order.doNumber} deleted`);
+    } catch (error) {
+      console.error('Failed to delete delivery record', error);
+      setDeleteError(`Could not delete ${order.doNumber}. Please try again.`);
+    } finally {
+      setIsDeleting(false);
+    }
   }
 
   function exportOrders() {
@@ -133,8 +164,15 @@ function App() {
         <div className="detail-header"><div><span className="eyebrow">DELIVERY RECORD</span><h2 id="detail-title">{selectedOrder.doNumber}</h2></div><button className="icon-button" onClick={() => setSelectedId(null)} aria-label="Close details"><X size={19} /></button></div>
         <div className="detail-customer"><span className="customer-mark">{selectedOrder.accountCode.slice(0, 1)}</span><div><strong>{selectedOrder.accountCode}. {selectedOrder.accountName}</strong><span>{formatDate(selectedOrder.deliveryDate)}</span></div></div>
         <div className="detail-facts"><div><span>PCS TN</span><strong>{formatPcs(selectedOrder.pcsTn)}</strong></div><div><span>Weight</span><strong>{formatWeight(selectedOrder.weight)}</strong></div><div><span>Delivery date</span><strong>{formatDate(selectedOrder.deliveryDate)}</strong></div><div><span>Status</span><strong>{selectedOrder.status}</strong></div></div>
-        <div className="detail-actions"><button className="button button-secondary" onClick={() => { setEditingOrder(selectedOrder); setSelectedId(null); setShowDialog(true); }}>Edit record</button><button className="button button-primary" onClick={() => setSelectedId(null)}>Done</button></div>
+        <div className="detail-actions"><button className="button button-danger" onClick={() => { setDeleteError(null); setConfirmDelete(true); }}><Trash2 size={15} />Delete</button><button className="button button-secondary" onClick={() => { setEditingOrder(selectedOrder); setSelectedId(null); setShowDialog(true); }}>Edit record</button><button className="button button-primary" onClick={() => setSelectedId(null)}>Done</button></div>
       </section></div>}
+      {confirmDelete && selectedOrder && <div className="confirm-backdrop"><section className="confirm-dialog" role="alertdialog" aria-modal="true" aria-labelledby="confirm-delete-title" aria-describedby="confirm-delete-description">
+        <h2 id="confirm-delete-title">Are you sure?</h2>
+        <p id="confirm-delete-description">Delete {selectedOrder.doNumber}? This action cannot be undone.</p>
+        {deleteError && <p className="delete-error" role="alert">{deleteError}</p>}
+        <div className="confirm-actions"><button className="button button-secondary" disabled={isDeleting} onClick={() => { setConfirmDelete(false); setDeleteError(null); }}>No, keep it</button><button className="button button-danger" disabled={isDeleting} onClick={() => void deleteOrder(selectedOrder)}>{isDeleting ? 'Deleting…' : 'Yes, delete'}</button></div>
+      </section></div>}
+      {notification && <div className="toast" role="status"><span>{notification}</span><button className="toast-close" onClick={() => setNotification(null)} aria-label="Dismiss notification"><X size={15} /></button></div>}
     </div>
   );
 }

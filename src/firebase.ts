@@ -1,5 +1,5 @@
 import { getApp, getApps, initializeApp } from 'firebase/app';
-import { collection, doc, getDocs, getFirestore, setDoc } from 'firebase/firestore';
+import { collection, deleteDoc, doc, getDocs, getFirestore, setDoc } from 'firebase/firestore';
 import type { ClearanceOrder } from './types';
 
 const config = {
@@ -23,4 +23,9 @@ export async function loadRemoteOrders(): Promise<ClearanceOrder[] | null> {
 export async function saveRemoteOrder(order: ClearanceOrder): Promise<void> {
   if (!db) return;
   await setDoc(doc(db, 'deliveries', order.id), order);
+}
+
+export async function deleteRemoteOrder(orderId: string): Promise<void> {
+  if (!db) return;
+  await deleteDoc(doc(db, 'deliveries', orderId));
 }
