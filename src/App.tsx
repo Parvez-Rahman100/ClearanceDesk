@@ -41,6 +41,7 @@ function normalizeDoNumber(doNumber: string) {
 
 function App() {
   const [workspace, setWorkspace] = useState<Workspace>('Delivery operations');
+  const [banglaSectionActive, setBanglaSectionActive] = useState(false);
   const [orders, setOrders] = useState<ClearanceOrder[]>(readSavedOrders);
   const [activities, setActivities] = useState<DeliveryActivity[]>(readSavedActivities);
   const [filter, setFilter] = useState<Filter>('All deliveries');
@@ -249,20 +250,20 @@ function App() {
     <div className="app-shell">
       <aside className="sidebar">
         <a className="brand" href="#dashboard" aria-label="Clearance Desk home"><span className="brand-mark"><BadgeCheck size={20} /></span><span className="brand-name">Clearance<span>Desk</span></span></a>
-        <div className="workspace-label">WORKSPACE</div>
-        <div className="workspace-switcher"><span className="workspace-avatar">{workspace === 'Delivery operations' ? 'D' : 'T'}</span><select aria-label="Select workspace" value={workspace} onChange={(event) => setWorkspace(event.target.value as Workspace)}><option>Delivery operations</option><option>Today's Delivered Operations</option></select><ChevronDown size={15} /></div>
-        <nav className="primary-nav" aria-label="Delivery navigation">
+        <div className="workspace-label">{banglaSectionActive ? 'কর্মক্ষেত্র' : 'WORKSPACE'}</div>
+        <div className="workspace-switcher"><span className="workspace-avatar">{banglaSectionActive ? 'দে' : workspace === 'Delivery operations' ? 'D' : 'T'}</span><select aria-label={banglaSectionActive ? 'কর্মক্ষেত্র নির্বাচন করুন' : 'Select workspace'} value={workspace} onChange={(event) => { setWorkspace(event.target.value as Workspace); setBanglaSectionActive(false); }}><option value="Delivery operations">{banglaSectionActive ? 'ডেলিভারি কার্যক্রম' : 'Delivery operations'}</option><option value="Today's Delivered Operations">{banglaSectionActive ? 'আজকের ডেলিভারি কার্যক্রম' : "Today's Delivered Operations"}</option></select><ChevronDown size={15} /></div>
+        {workspace === 'Delivery operations' && <nav className="primary-nav" aria-label="Delivery navigation">
           <div className="nav-heading">DELIVERIES</div>
           <button className={`nav-link ${filter === 'All deliveries' ? 'active' : ''}`} onClick={() => setFilter('All deliveries')}><LayoutDashboard size={17} />All records</button>
           <button className={`nav-link ${filter === 'BEFORE DELIVER CK BLNC' ? 'active' : ''}`} onClick={() => setFilter('BEFORE DELIVER CK BLNC')}><CircleAlert size={17} />Balance check<span className="nav-count">{balanceCheckCount}</span></button>
           <button className={`nav-link ${filter === 'OK FOR DELIVERY' ? 'active' : ''}`} onClick={() => setFilter('OK FOR DELIVERY')}><BadgeCheck size={17} />OK for delivery</button>
-        </nav>
-        <div className="sidebar-bottom"><div className="sidebar-rule" /><div className="sync-note"><span className="sync-dot" />{syncLabel}</div><div className="profile-row"><div className="profile-avatar">DO</div><div><strong>Delivery register</strong><span>October 2026</span></div><ChevronDown size={15} /></div></div>
+        </nav>}
+        {workspace === 'Delivery operations' && <div className="sidebar-bottom"><div className="sidebar-rule" /><div className="sync-note"><span className="sync-dot" />{syncLabel}</div><div className="profile-row"><div className="profile-avatar">DO</div><div><strong>Delivery register</strong><span>October 2026</span></div><ChevronDown size={15} /></div></div>}
       </aside>
 
       <main className="main-area" id="dashboard">
-        <header className="topbar"><div className="company-brand"><img className="company-logo" src="/alif-steel-logo.svg" alt="" /><div className="company-copy"><strong>Alif Steel Mills Limited</strong><span>{workspace}</span></div></div><div className="topbar-right"><span className="today-label"><CalendarDays size={15} />{todayLabel}</span><span className="avatar-small">DO</span></div></header>
-        {workspace === "Today's Delivered Operations" ? <TodaysDeliveredOperations /> : <>
+        <header className="topbar"><div className="company-brand"><img className="company-logo" src="/alif-steel-logo.svg" alt="" /><div className="company-copy"><strong>{banglaSectionActive ? 'আলিফ স্টিল মিলস লিমিটেড' : 'Alif Steel Mills Limited'}</strong><span>{banglaSectionActive ? 'আজকের ডেলিভারি কার্যক্রম' : workspace}</span></div></div><div className="topbar-right"><span className="today-label"><CalendarDays size={15} />{banglaSectionActive ? new Intl.DateTimeFormat('bn-BD', { weekday: 'long', month: 'long', day: 'numeric' }).format(new Date()) : todayLabel}</span><span className="avatar-small">{banglaSectionActive ? 'ডি ও' : 'DO'}</span></div></header>
+        {workspace === "Today's Delivered Operations" ? <TodaysDeliveredOperations onSectionChange={setBanglaSectionActive} /> : <>
         <div className="page-content">
           <section className="page-heading"><div><div className="eyebrow"><span className="eyebrow-line" />DELIVERY OPERATIONS</div><h1>Delivery clearance</h1><p className="page-subtitle">Dispatch records and balance-check status, October 2026.</p></div><div className="hero-actions"><label className="date-filter"><CalendarDays size={16} /><span className="sr-only">Show deliveries for date</span><input type="date" value={selectedDeliveryDate} onChange={(event) => setSelectedDeliveryDate(event.target.value)} aria-label="Show deliveries for date" />{selectedDeliveryDate && <button type="button" className="clear-date" onClick={() => setSelectedDeliveryDate('')} aria-label="Clear date filter"><X size={14} /></button>}</label><button className="button button-primary" onClick={() => { setEditingOrder(null); setShowDialog(true); }}><Plus size={17} />Add delivery</button></div></section>
 

@@ -74,6 +74,13 @@ h1, h2, h3, p { margin: 0; }
 .page-heading h1 { margin-top: 8px; color: #29342c; font-family: var(--serif); font-size: 30px; font-weight: 400; }
 .metric-date-value { font-size: 20px; }
 .workspace-form-error { margin: 0 25px 14px; color: #a33f38; font-size: 11px; }
+.bangla-language { font-family: "Nirmala UI", "Vrinda", sans-serif; }
+.bangla-language h1, .bangla-language h2, .bangla-language button, .bangla-language label, .bangla-language .metric, .bangla-language .panel-heading p, .bangla-language .page-footer, .bangla-language .table-footer, .bangla-language .empty-state { font-family: "Nirmala UI", "Vrinda", sans-serif; }
+.bangla-delivery-table { table-layout: auto; }
+.bangla-delivery-table th, .bangla-delivery-table td { padding-right: 5px; padding-left: 5px; font-family: "Nirmala UI", "Vrinda", sans-serif; font-weight: 700; }
+.bangla-delivery-table th:first-child, .bangla-delivery-table td:first-child { padding-left: 9px; }
+.bangla-delivery-table th:last-child, .bangla-delivery-table td:last-child { padding-right: 9px; }
+.bangla-delivery-table td strong { font-weight: 700; }
 .page-subtitle { margin-top: 6px; color: #788179; font-size: 12px; }
 .button { display: inline-flex; min-height: 35px; align-items: center; justify-content: center; gap: 8px; padding: 0 12px; border: 1px solid transparent; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: 650; transition: background .15s ease, border-color .15s ease; }
 .button-primary { border-color: #365842; background: #3c6048; color: white; }

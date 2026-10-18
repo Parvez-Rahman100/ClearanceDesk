@@ -9,6 +9,11 @@ const displayDate = (value: string) => {
   return new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).format(date);
 };
 
+const displayBanglaDate = (value: string) => {
+  const date = new Date(`${value}T12:00:00`);
+  return new Intl.DateTimeFormat('bn-BD', { day: 'numeric', month: 'long', year: 'numeric' }).format(date);
+};
+
 const dateToday = () => {
   const date = new Date();
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
@@ -19,10 +24,23 @@ function formatTon(value: number | null) {
 }
 
 function normalizeDoNumber(value: string) {
-  return value.replace(/[০-৯]/g, (digit) => String('০১২৩৪৫৬৭৮৯'.indexOf(digit))).replace(/\s+/g, '').toUpperCase();
+  return toWesternDigits(value)
+    .replace(/ডি\s*ও/gu, 'DO').replace(/\s+/g, '').toUpperCase();
 }
 
-function TodaysDeliveredOperations() {
+function toWesternDigits(value: string) {
+  return value.replace(/[০-৯]/g, (digit) => String('০১২৩৪৫৬৭৮৯'.indexOf(digit)));
+}
+
+function displayBanglaDoNumber(value: string) {
+  return value.replace(/^DO\s*/i, 'ডি ও ').replace(/\d/g, (digit) => '০১২৩৪৫৬৭৮৯'[Number(digit)]);
+}
+
+function formatBanglaQuantity(value: number) {
+  return value.toLocaleString('bn-BD', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
+}
+
+function TodaysDeliveredOperations({ onSectionChange }: { onSectionChange: (isBangla: boolean) => void }) {
   const [section, setSection] = useState<Section>('english');
   const [selectedDate, setSelectedDate] = useState('2026-10-17');
   const [englishRows, setEnglishRows] = useState(readEnglishDeliveries);
@@ -61,6 +79,12 @@ function TodaysDeliveredOperations() {
   const englishPcs = selectedEnglishRows.reduce((total, row) => total + (row.pcsTon ?? 0), 0);
   const banglaQuantity = selectedBanglaRows.reduce((total, row) => total + row.quantityTon, 0);
   const activeCount = section === 'english' ? selectedEnglishRows.length : selectedBanglaRows.length;
+  const isBangla = section === 'bangla';
+  const sectionDate = isBangla ? displayBanglaDate(selectedDate) : displayDate(selectedDate);
+
+  useEffect(() => {
+    onSectionChange(isBangla);
+  }, [isBangla, onSectionChange]);
 
   function addEnglishDelivery(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -97,13 +121,19 @@ function TodaysDeliveredOperations() {
       setFormError(`${doNumber} নম্বরটি বাংলা ডেলিভারি তালিকায় আগে থেকেই আছে।`);
       return;
     }
+    const quantityText = toWesternDigits(String(form.get('quantityTon')).trim());
+    const quantityTon = Number(quantityText);
+    if (!quantityText || !Number.isFinite(quantityTon) || quantityTon < 0) {
+      setFormError('পরিমাণ শূন্য বা তার বেশি সংখ্যা হতে হবে।');
+      return;
+    }
     const row: BanglaDelivery = {
       id: `bangla-${crypto.randomUUID()}`,
       serialNumber: banglaRows.reduce((maximum, item) => Math.max(maximum, item.serialNumber), 0) + 1,
       doNumber,
       customerName: String(form.get('customerName')).trim(),
       address: String(form.get('address')).trim(),
-      quantityTon: Number(form.get('quantityTon')),
+      quantityTon,
       deliveryDate: String(form.get('deliveryDate')),
     };
     setBanglaRows((current) => [...current, row]);
@@ -114,53 +144,53 @@ function TodaysDeliveredOperations() {
 
   return (
     <>
-      <div className="page-content">
+      <div className={`page-content delivered-operations-page ${isBangla ? 'bangla-language' : ''}`} lang={isBangla ? 'bn' : 'en'}>
         <section className="page-heading">
           <div>
-            <div className="eyebrow"><span className="eyebrow-line" />TODAY'S DELIVERED OPERATIONS</div>
-            <h1>Today's Delivered Operations</h1>
-            <p className="page-subtitle">English and Bangla delivery sheets, kept separate.</p>
+            <div className="eyebrow"><span className="eyebrow-line" />{isBangla ? 'আজকের ডেলিভারি কার্যক্রম' : "TODAY'S DELIVERED OPERATIONS"}</div>
+            <h1>{isBangla ? 'আজকের ডেলিভারি কার্যক্রম' : "Today's Delivered Operations"}</h1>
+            <p className="page-subtitle">{isBangla ? 'নির্বাচিত তারিখের বাংলা ডেলিভারি তালিকা।' : 'English and Bangla delivery sheets, kept separate.'}</p>
           </div>
           <div className="hero-actions">
-            <label className="date-filter"><CalendarDays size={16} /><span className="sr-only">Select delivery date</span><input type="date" value={selectedDate} onChange={(event) => setSelectedDate(event.target.value)} aria-label="Select delivery date" /></label>
-            <button className="button button-primary" onClick={() => { setFormError(null); setShowAddForm(true); }}><Plus size={17} />Add {section === 'english' ? 'English' : 'Bangla'} delivery</button>
+            <label className="date-filter"><CalendarDays size={16} /><span className="sr-only">{isBangla ? 'ডেলিভারির তারিখ নির্বাচন করুন' : 'Select delivery date'}</span><input type="date" value={selectedDate} onChange={(event) => setSelectedDate(event.target.value)} aria-label={isBangla ? 'ডেলিভারির তারিখ নির্বাচন করুন' : 'Select delivery date'} /></label>
+            <button className="button button-primary" onClick={() => { setFormError(null); setShowAddForm(true); }}><Plus size={17} />{isBangla ? 'ডেলিভারি যোগ করুন' : 'Add English delivery'}</button>
           </div>
         </section>
 
-        <section className="metrics-grid" aria-label="Selected delivery totals">
-          <article className="metric metric-open"><div className="metric-top"><span>{section === 'english' ? 'English deliveries' : 'বাংলা ডেলিভারি'}</span><span className="metric-icon"><CalendarDays size={17} /></span></div><div className="metric-value">{activeCount}</div><div className="metric-foot"><span className="metric-marker marker-green" />{displayDate(selectedDate)}</div></article>
+        <section className="metrics-grid" aria-label={isBangla ? 'নির্বাচিত ডেলিভারির হিসাব' : 'Selected delivery totals'}>
+          <article className="metric metric-open"><div className="metric-top"><span>{section === 'english' ? 'English deliveries' : 'বাংলা ডেলিভারি'}</span><span className="metric-icon"><CalendarDays size={17} /></span></div><div className="metric-value">{isBangla ? activeCount.toLocaleString('bn-BD') : activeCount}</div><div className="metric-foot"><span className="metric-marker marker-green" />{sectionDate}</div></article>
           {section === 'english'
             ? <><article className="metric"><div className="metric-top"><span>Sum of PCS TN</span></div><div className="metric-value">{englishPcs.toFixed(3)}</div><div className="metric-foot">Across English deliveries</div></article><article className="metric"><div className="metric-top"><span>Sum of weight ton</span></div><div className="metric-value">{englishWeight.toFixed(3)}</div><div className="metric-foot">Across English deliveries</div></article></>
-            : <><article className="metric"><div className="metric-top"><span>মোট পরিমাণ (মেঃ টন)</span></div><div className="metric-value">{banglaQuantity.toFixed(3)}</div><div className="metric-foot">নির্বাচিত দিনের মোট ডেলিভারি</div></article><article className="metric"><div className="metric-top"><span>Delivery date</span></div><div className="metric-value metric-date-value">{displayDate(selectedDate)}</div><div className="metric-foot">Selected Bangla delivery date</div></article></>}
+            : <><article className="metric"><div className="metric-top"><span>মোট পরিমাণ (মেঃ টন)</span></div><div className="metric-value">{formatBanglaQuantity(banglaQuantity)}</div><div className="metric-foot">নির্বাচিত দিনের মোট ডেলিভারি</div></article><article className="metric"><div className="metric-top"><span>ডেলিভারির তারিখ</span></div><div className="metric-value metric-date-value">{sectionDate}</div><div className="metric-foot">নির্বাচিত দিনের বাংলা ডেলিভারি</div></article></>}
         </section>
 
         <section className="orders-panel">
           <div className="panel-heading">
-            <div><div className="panel-title-row"><h2>{section === 'english' ? 'English delivery' : 'বাংলা ডেলিভারি'}</h2><span className="result-count">{activeCount}</span></div><p>{section === 'english' ? 'Sales delivery records' : 'বাংলা ডেলিভারি রেকর্ড'} · {displayDate(selectedDate)}</p></div>
+            <div><div className="panel-title-row"><h2>{section === 'english' ? 'English delivery' : 'বাংলা ডেলিভারি'}</h2><span className="result-count">{isBangla ? activeCount.toLocaleString('bn-BD') : activeCount}</span></div><p>{section === 'english' ? 'Sales delivery records' : 'বাংলা ডেলিভারি রেকর্ড'} · {sectionDate}</p></div>
           </div>
-          <div className="table-toolbar"><div className="filter-tabs" role="tablist" aria-label="Delivery language">
-            <button role="tab" aria-selected={section === 'english'} className={`filter-tab ${section === 'english' ? 'selected' : ''}`} onClick={() => setSection('english')}>English delivery</button>
+          <div className="table-toolbar"><div className="filter-tabs" role="tablist" aria-label={isBangla ? 'ডেলিভারির ভাষা' : 'Delivery language'}>
+            <button role="tab" aria-selected={section === 'english'} className={`filter-tab ${section === 'english' ? 'selected' : ''}`} onClick={() => setSection('english')}>{isBangla ? 'ইংরেজি ডেলিভারি' : 'English delivery'}</button>
             <button role="tab" aria-selected={section === 'bangla'} className={`filter-tab ${section === 'bangla' ? 'selected' : ''}`} onClick={() => setSection('bangla')}>বাংলা ডেলিভারি</button>
-          </div><button className="button button-quiet" onClick={() => { setFormError(null); setShowAddForm(true); }}><Plus size={15} />Add to {section === 'english' ? 'English' : 'Bangla'}</button></div>
+          </div><button className="button button-quiet" onClick={() => { setFormError(null); setShowAddForm(true); }}><Plus size={15} />{isBangla ? 'বাংলা ডেলিভারি যোগ করুন' : 'Add to English'}</button></div>
 
           {section === 'english' ? <div className="table-scroll"><table><thead><tr><th>UMBRELLA</th><th>DO DATE</th><th>DO NO</th><th>DELIVERY DATE</th><th>NAME OF PROPRIETOR</th><th>ADDRESS</th><th>DELIVERY CHALLAN</th><th>PCS TON</th><th>WEIGHT TON</th></tr></thead><tbody>
             {selectedEnglishRows.map((row) => <tr key={row.id}><td>{row.umbrella}</td><td>{displayDate(row.doDate)}</td><td><strong>{row.doNumber}</strong></td><td>{displayDate(row.deliveryDate)}</td><td>{row.proprietor}</td><td>{row.address}</td><td>{row.deliveryChallan}</td><td className="numeric-cell">{formatTon(row.pcsTon)}</td><td className="numeric-cell">{formatTon(row.weightTon)}</td></tr>)}
           </tbody></table>{selectedEnglishRows.length === 0 && <div className="empty-state"><strong>No English deliveries for this date</strong><span>Choose another date or add an English delivery.</span></div>}</div>
-            : <div className="table-scroll"><table lang="bn"><thead><tr><th>ক্রমিক নং</th><th>ডি ও নং</th><th>ক্রেতার নাম</th><th>ঠিকানা</th><th>পরিমাণ মেঃ টন</th></tr></thead><tbody>
-              {selectedBanglaRows.map((row) => <tr key={row.id}><td>{row.serialNumber.toLocaleString('bn-BD')}</td><td><strong>{row.doNumber}</strong></td><td>{row.customerName}</td><td>{row.address}</td><td className="numeric-cell">{row.quantityTon.toLocaleString('bn-BD', { minimumFractionDigits: 3, maximumFractionDigits: 3 })}</td></tr>)}
+            : <div className="table-scroll"><table className="bangla-delivery-table" lang="bn"><thead><tr><th>ক্রমিক নং</th><th>ডি ও নং</th><th>ক্রেতার নাম</th><th>ঠিকানা</th><th>পরিমাণ মেঃ টন</th></tr></thead><tbody>
+              {selectedBanglaRows.map((row) => <tr key={row.id}><td>{row.serialNumber.toLocaleString('bn-BD')}</td><td><strong>{displayBanglaDoNumber(row.doNumber)}</strong></td><td>{row.customerName}</td><td>{row.address}</td><td className="numeric-cell">{formatBanglaQuantity(row.quantityTon)}</td></tr>)}
             </tbody></table>{selectedBanglaRows.length === 0 && <div className="empty-state"><strong>এই তারিখে কোনো বাংলা ডেলিভারি নেই</strong><span>অন্য তারিখ নির্বাচন করুন অথবা বাংলা ডেলিভারি যোগ করুন।</span></div>}</div>}
-          <div className="table-footer"><span>{section === 'english' ? 'English delivery records' : 'বাংলা ডেলিভারি রেকর্ড'}: <strong>{activeCount}</strong></span><span>{storageError ?? 'Saved on this device'}</span></div>
+          <div className="table-footer"><span>{section === 'english' ? 'English delivery records' : 'বাংলা ডেলিভারি রেকর্ড'}: <strong>{isBangla ? activeCount.toLocaleString('bn-BD') : activeCount}</strong></span><span>{isBangla ? storageError ? 'এই ডিভাইসে সংরক্ষণ করা যায়নি।' : 'এই ডিভাইসে সংরক্ষিত' : storageError ?? 'Saved on this device'}</span></div>
         </section>
-        <footer className="page-footer"><span>Clearance Desk <span className="footer-dot">|</span> Today's Delivered Operations</span><span>English and Bangla registers are stored separately</span></footer>
+        <footer className="page-footer"><span>{isBangla ? 'ক্লিয়ারেন্স ডেস্ক | আজকের ডেলিভারি কার্যক্রম' : "Clearance Desk | Today's Delivered Operations"}</span><span>{isBangla ? 'বাংলা ডেলিভারি তালিকা' : 'English and Bangla registers are stored separately'}</span></footer>
       </div>
 
       {showAddForm && <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setShowAddForm(false); }}><form className="order-dialog" onSubmit={section === 'english' ? addEnglishDelivery : addBanglaDelivery}>
-        <div className="dialog-header"><div><span className="eyebrow">{section === 'english' ? 'ENGLISH DELIVERY' : 'বাংলা ডেলিভারি'}</span><h2>{section === 'english' ? 'Add English delivery' : 'বাংলা ডেলিভারি যোগ করুন'}</h2><p>{section === 'english' ? 'Enter the delivery details.' : 'ডেলিভারির তথ্য লিখুন।'}</p></div><button type="button" className="icon-button" onClick={() => setShowAddForm(false)} aria-label="Close form"><X size={19} /></button></div>
+        <div className="dialog-header"><div><span className="eyebrow">{section === 'english' ? 'ENGLISH DELIVERY' : 'বাংলা ডেলিভারি'}</span><h2>{section === 'english' ? 'Add English delivery' : 'বাংলা ডেলিভারি যোগ করুন'}</h2><p>{section === 'english' ? 'Enter the delivery details.' : 'ডেলিভারির তথ্য লিখুন।'}</p></div><button type="button" className="icon-button" onClick={() => setShowAddForm(false)} aria-label={isBangla ? 'ফর্ম বন্ধ করুন' : 'Close form'}><X size={19} /></button></div>
         {section === 'english'
           ? <div className="form-grid"><label className="field">Umbrella<input name="umbrella" required min="0" step="1" type="number" defaultValue="0" /></label><label className="field">DO date<input name="doDate" required type="date" defaultValue={selectedDate} /></label><label className="field">Delivery date<input name="deliveryDate" required type="date" defaultValue={selectedDate || dateToday()} /></label><label className="field">DO no<input name="doNumber" required placeholder="DO 0811" /></label><label className="field">Delivery challan<input name="deliveryChallan" required /></label><label className="field field-wide">Name of proprietor<input name="proprietor" required /></label><label className="field field-wide">Address<input name="address" required /></label><label className="field">PCS ton<input name="pcsTon" min="0" step="0.001" type="number" /></label><label className="field">Weight ton<input name="weightTon" required min="0" step="0.001" type="number" /></label></div>
-          : <div className="form-grid" lang="bn"><label className="field">ডেলিভারির তারিখ<input name="deliveryDate" required type="date" defaultValue={selectedDate || dateToday()} /></label><label className="field">ডি ও নং<input name="doNumber" required placeholder="DO ০৮১১" /></label><label className="field field-wide">ক্রেতার নাম<input name="customerName" required /></label><label className="field field-wide">ঠিকানা<input name="address" required /></label><label className="field">পরিমাণ মেঃ টন<input name="quantityTon" required min="0" step="0.001" type="number" /></label></div>}
+          : <div className="form-grid" lang="bn"><label className="field">ডেলিভারির তারিখ<input name="deliveryDate" required type="date" defaultValue={selectedDate || dateToday()} lang="bn" /></label><label className="field">ডি ও নং<input name="doNumber" required placeholder="ডি ও ০৮১১" /></label><label className="field field-wide">ক্রেতার নাম<input name="customerName" required /></label><label className="field field-wide">ঠিকানা<input name="address" required /></label><label className="field">পরিমাণ মেঃ টন<input name="quantityTon" required inputMode="decimal" /></label></div>}
         {formError && <p className="workspace-form-error" role="alert">{formError}</p>}
-        <div className="dialog-footer"><span><span className="required-mark">*</span> Required fields</span><div><button className="button button-secondary" type="button" onClick={() => setShowAddForm(false)}>Cancel</button><button className="button button-primary" type="submit"><Plus size={16} />{section === 'english' ? 'Add delivery' : 'ডেলিভারি যোগ করুন'}</button></div></div>
+        <div className="dialog-footer"><span>{section === 'english' ? <><span className="required-mark">*</span> Required fields</> : <><span className="required-mark">*</span> আবশ্যক তথ্য</>}</span><div><button className="button button-secondary" type="button" onClick={() => setShowAddForm(false)}>{isBangla ? 'বাতিল' : 'Cancel'}</button><button className="button button-primary" type="submit"><Plus size={16} />{section === 'english' ? 'Add delivery' : 'ডেলিভারি যোগ করুন'}</button></div></div>
       </form></div>}
     </>
   );

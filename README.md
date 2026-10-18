@@ -24,5 +24,6 @@ Copy `.env.example` to `.env.local` and enter a Firebase Web App's API key, auth
 - Choose 10, 25, 50, or 100 delivery rows per page and navigate through filtered results.
 - Use Today's Update to view deliveries added, edited, or imported today; the latest activity is saved on this device.
 - Switch to Today's Delivered Operations for the separate English and Bangla delivery registers transcribed from the supplied 17-Oct-2026 sheets; additions are stored separately on this device.
+- The Bangla delivery section uses Bangla labels, dates, numerals, bold table text, and compact table columns.
 - Add and edit delivery records with the same columns as the source sheets; new records cannot reuse an existing DO number.
 - Export the current delivery view as CSV, or import CSV files using the exported column order: DATE, ACCOUNT CODE, ACCOUNT NAME, INV / DO NO, Sum of PCS TN, Sum of WEIGHT, STATUS. Dates may use YYYY-MM-DD or DD-MM-YY; imports are validated for duplicate DO numbers before they are added.
