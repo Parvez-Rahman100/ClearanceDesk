@@ -5,6 +5,7 @@ import type { ClearanceOrder, ClearanceStatus } from './types';
 
 type Filter = 'All deliveries' | ClearanceStatus;
 const filters: Filter[] = ['All deliveries', 'OK FOR DELIVERY', 'BEFORE DELIVER CK BLNC'];
+const pageSizeOptions = [10, 25, 50, 100];
 const firebaseEnabled = Boolean(import.meta.env.VITE_FIREBASE_API_KEY && import.meta.env.VITE_FIREBASE_PROJECT_ID && import.meta.env.VITE_FIREBASE_APP_ID);
 const todayLabel = new Intl.DateTimeFormat('en-US', { weekday: 'long', month: 'long', day: 'numeric' }).format(new Date());
 const formatDate = (date: string) => {
@@ -29,6 +30,8 @@ function App() {
   const [filter, setFilter] = useState<Filter>('All deliveries');
   const [selectedDeliveryDate, setSelectedDeliveryDate] = useState('');
   const [query, setQuery] = useState('');
+  const [pageSize, setPageSize] = useState(10);
+  const [currentPage, setCurrentPage] = useState(1);
   const [showDialog, setShowDialog] = useState(false);
   const [editingOrder, setEditingOrder] = useState<ClearanceOrder | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -62,6 +65,10 @@ function App() {
     return () => window.clearTimeout(timeout);
   }, [notification]);
 
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filter, pageSize, query, selectedDeliveryDate]);
+
   const selectedOrder = orders.find((order) => order.id === selectedId) ?? null;
   const visibleOrders = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -73,6 +80,22 @@ function App() {
       return matchesFilter && matchesDate && matchesQuery;
     });
   }, [filter, orders, query, selectedDeliveryDate]);
+
+  const pageCount = Math.max(1, Math.ceil(visibleOrders.length / pageSize));
+  const pageStart = visibleOrders.length === 0 ? 0 : (currentPage - 1) * pageSize + 1;
+  const pageEnd = Math.min(currentPage * pageSize, visibleOrders.length);
+  const paginatedOrders = visibleOrders.slice(pageStart - 1, pageEnd);
+  const pageNumbers: Array<number | 'ellipsis-start' | 'ellipsis-end'> = pageCount <= 7
+    ? Array.from({ length: pageCount }, (_, index) => index + 1)
+    : currentPage <= 4
+      ? [1, 2, 3, 4, 5, 'ellipsis-end', pageCount]
+      : currentPage >= pageCount - 3
+        ? [1, 'ellipsis-start', pageCount - 4, pageCount - 3, pageCount - 2, pageCount - 1, pageCount]
+        : [1, 'ellipsis-start', currentPage - 1, currentPage, currentPage + 1, 'ellipsis-end', pageCount];
+
+  useEffect(() => {
+    if (currentPage > pageCount) setCurrentPage(pageCount);
+  }, [currentPage, pageCount]);
 
   const pcsTotal = orders.reduce((sum, order) => sum + (order.pcsTn ?? 0), 0);
   const weightTotal = orders.reduce((sum, order) => sum + order.weight, 0);
@@ -154,6 +177,7 @@ function App() {
       setFilter('All deliveries');
       setSelectedDeliveryDate('');
       setQuery('');
+      setCurrentPage(1);
       setNotification({ message: `${importedOrders.length} deliveries imported`, type: 'success' });
 
       if (firebaseEnabled) {
@@ -204,8 +228,9 @@ function App() {
           <section className="orders-panel">
             <div className="panel-heading"><div><div className="panel-title-row"><h2>Delivery register</h2><span className="result-count">{visibleOrders.length}</span></div><p>{selectedDeliveryDate ? `Deliveries for ${formatDate(selectedDeliveryDate)}.` : 'Photo records transcribed for October 2026.'}</p></div><div className="panel-actions"><input ref={importInput} className="sr-only" type="file" accept=".csv,text/csv" aria-label="Choose CSV file to import" onChange={importCsv} /><button className="button button-quiet" disabled={isImporting} onClick={() => importInput.current?.click()}><FileUp size={16} />{isImporting ? 'Importing…' : 'Import CSV'}</button><button className="button button-quiet" onClick={exportOrders}><ArrowDownToLine size={16} />Export CSV</button></div></div>
             <div className="table-toolbar"><div className="filter-tabs" role="tablist" aria-label="Filter deliveries">{filters.map((item) => <button key={item} role="tab" aria-selected={filter === item} className={`filter-tab ${filter === item ? 'selected' : ''}`} onClick={() => setFilter(item)}>{item === 'All deliveries' ? item : item === 'OK FOR DELIVERY' ? 'OK for delivery' : 'Balance check'}{item === 'BEFORE DELIVER CK BLNC' && <span className="tab-count">{balanceCheckCount}</span>}</button>)}</div><label className="search-box"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search account or DO no." aria-label="Search deliveries" />{query && <button type="button" onClick={() => setQuery('')} aria-label="Clear search"><X size={14} /></button>}</label></div>
+            <div className="entries-toolbar"><label htmlFor="page-size">Show <select id="page-size" value={pageSize} onChange={(event) => setPageSize(Number(event.target.value))}>{pageSizeOptions.map((size) => <option key={size} value={size}>{size}</option>)}</select> entries</label></div>
             <div className="table-scroll"><table><thead><tr><th>DATE</th><th>ACCOUNT NAME</th><th>INV / DO NO</th><th>PCS TN</th><th>WEIGHT</th><th>STATUS</th><th><span className="sr-only">Open delivery details</span></th></tr></thead><tbody>
-              {visibleOrders.map((order) => <tr key={order.id}>
+              {paginatedOrders.map((order) => <tr key={order.id}>
                 <td><span className="delivery-date">{formatDate(order.deliveryDate)}</span></td>
                 <td><div className="customer-cell"><strong>{order.accountCode}. {order.accountName}</strong></div></td>
                 <td><button className="order-reference" onClick={() => setSelectedId(order.id)}><strong>{order.doNumber}</strong></button></td>
@@ -215,7 +240,15 @@ function App() {
                 <td><button className="row-open" onClick={() => setSelectedId(order.id)} aria-label={`Open ${order.doNumber}`}><ArrowUpRight size={16} /></button></td>
               </tr>)}
             </tbody></table>{visibleOrders.length === 0 && <div className="empty-state"><Search size={22} /><strong>No matching deliveries</strong><span>Try another account, DO number, or status.</span></div>}</div>
-            <div className="table-footer"><span>Showing <strong>{visibleOrders.length}</strong> of <strong>{orders.length}</strong> deliveries</span><span>{syncLabel}</span></div>
+            <div className="table-footer"><span>Showing <strong>{pageStart} to {pageEnd}</strong> of <strong>{visibleOrders.length}</strong> deliveries</span><nav className="pagination" aria-label="Delivery register pages">
+              <button onClick={() => setCurrentPage(1)} disabled={currentPage === 1} aria-label="First page">First</button>
+              <button onClick={() => setCurrentPage((page) => Math.max(1, page - 1))} disabled={currentPage === 1} aria-label="Previous page">Previous</button>
+              {pageNumbers.map((page) => typeof page === 'number'
+                ? <button key={page} className={currentPage === page ? 'current' : ''} onClick={() => setCurrentPage(page)} aria-label={`Page ${page}`} aria-current={currentPage === page ? 'page' : undefined}>{page}</button>
+                : <span className="pagination-ellipsis" key={page}>…</span>)}
+              <button onClick={() => setCurrentPage((page) => Math.min(pageCount, page + 1))} disabled={currentPage === pageCount} aria-label="Next page">Next</button>
+              <button onClick={() => setCurrentPage(pageCount)} disabled={currentPage === pageCount} aria-label="Last page">Last</button>
+            </nav><span className="sync-label">{syncLabel}</span></div>
           </section>
           <footer className="page-footer"><span>Clearance Desk <span className="footer-dot">|</span> Delivery operations</span><span>Imported from 2 source photos</span></footer>
         </div>
